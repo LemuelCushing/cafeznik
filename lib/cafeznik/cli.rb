@@ -6,134 +6,139 @@ require 'base64'
 
 module Cafeznik
   class CLI
-    def self.start(argv)
-      options = parse_options(argv)
-      repo = options[:repo]
+    class << self
+      def start(argv)
+        options = parse_options(argv)
+        repo = options[:repo]
 
-      if repo.nil?
-        puts "No repository provided. Use -r or --repo to specify a GitHub repository."
-        exit 1
-      end
-
-      # Fetch repository file structure
-      files = fetch_files_from_github(repo)
-
-      if files.empty?
-        puts "No files found in the repository."
-        exit 1
-      end
-
-      # Use fzf to select files
-      selected_files = select_files(files)
-
-      if selected_files.empty?
-        puts "No files selected."
-        exit 0
-      end
-
-      # Copy file contents to clipboard
-      copy_files_to_clipboard(repo, selected_files, options[:use_cat])
-    end
-
-    # Parse options like --repo, --no-header
-    def self.parse_options(argv)
-      options = { use_cat: false }
-      OptionParser.new do |opts|
-        opts.banner = "Usage: cafeznik [--no-header|-nh] <files>"
-
-        opts.on("--no-header", "-nh", "Use `cat` instead of `tail -n +1`") do
-          options[:use_cat] = true
+        unless repo
+          puts "no repository provided. use -r or --repo to specify a github repository."
+          exit 1
         end
 
-        opts.on("-r", "--repo REPO", "GitHub repository (owner/repo format)") do |r|
-          options[:repo] = r
+        file_structure = fetch_file_tree_from_github(repo)
+        if file_structure.empty?
+          puts "no files or directories found in the repository."
+          exit 1
         end
 
-        opts.on("-h", "--help", "Show this help message") do
-          puts opts
-          exit
+        selected_items = select_items(file_structure, options[:verbose])
+        if selected_items.empty?
+          puts "no items selected."
+          exit 0
         end
-      end.parse!(argv)
-      options
-    end
 
-    # Fetch GitHub token from gh or git config
-    def self.fetch_github_token
-      token = nil
+        all_files = expand_selected_items(repo, selected_items, options[:verbose])
+        copy_files_to_clipboard(repo, all_files, options[:no_header], options[:verbose])
+      end
 
-      # First, try to get the token via `gh`
-      begin
-        cmd = TTY::Command.new
-        result = cmd.run("gh auth status --show-token")
-        token = result.out.match(/Token: (\S+)/)[1] rescue nil
+      private
+
+      def parse_options(argv)
+        options = { no_header: false, verbose: false }
+        OptionParser.new do |opts|
+          opts.banner = "usage: cafeznik [options]"
+
+          opts.on("--no-header", "-nh", "use `cat` instead of `tail -n +1`") do
+            options[:no_header] = true
+          end
+
+          opts.on("-r", "--repo REPO", "github repository (owner/repo format)") do |r|
+            options[:repo] = r
+          end
+
+          opts.on("-v", "--verbose", "run in verbose mode, showing internal logs") do
+            options[:verbose] = true
+          end
+
+          opts.on("-h", "--help", "show this help message") do
+            puts opts
+            exit
+          end
+        end.parse!(argv)
+        options
+      end
+
+      def fetch_github_token = @github_token ||= 
+        ENV['GITHUB_TOKEN'] || 
+        fetch_token_via_gh || 
+        (puts("github token not found. please configure `gh` or set GITHUB_TOKEN in your environment.") && exit(1))
+
+      def fetch_token_via_gh
+        cmd = TTY::Command.new(printer: verbose? ? :pretty : :null)
+        result = cmd.run("gh auth token")
+        result.out.strip
       rescue TTY::Command::ExitError
-        # If `gh` is not installed or no token found, continue
+        nil
       end
 
-      # Fallback: Check for the token in environment variables
-      token ||= ENV['GITHUB_TOKEN']
-
-      unless token
-        puts "GitHub token not found. Please configure `gh` or set GITHUB_TOKEN in your environment."
-        exit 1
-      end
-
-      token
-    end
-
-    # Fetch files from the GitHub repository
-    def self.fetch_files_from_github(repo)
-      client = Octokit::Client.new(access_token: fetch_github_token)
-      begin
+      def fetch_file_tree_from_github(repo)
+        client = Octokit::Client.new(access_token: fetch_github_token)
         contents = client.contents(repo)
-        files = extract_files(contents)
+        extract_paths(repo, contents)
       rescue Octokit::NotFound
-        puts "Repository not found: #{repo}"
+        puts "repository not found: #{repo}" if verbose?
         exit 1
       end
-      files
-    end
 
-    # Recursively extract files from GitHub contents API
-    def self.extract_files(contents, path = "")
-      files = []
-      contents.each do |item|
-        if item[:type] == 'dir'
-          dir_contents = Octokit.contents(item[:repository][:full_name], path: item[:path])
-          files.concat(extract_files(dir_contents, item[:path]))
-        elsif item[:type] == 'file'
-          files << item[:path]
+      def extract_paths(repo, contents)
+        contents.each_with_object([]) do |item, paths|
+          paths << item[:path]
+          if item[:type] == 'dir'
+            dir_contents = Octokit.contents(repo, path: item[:path])
+            paths.concat(extract_paths(repo, dir_contents))
+          end
         end
       end
-      files
-    end
 
-    # Use fzf for file selection
-    def self.select_files(files)
-      cmd = TTY::Command.new
-      result = cmd.run("echo '#{files.join("\n")}' | fzf --multi")
-      result.out.strip.split("\n")
-    rescue TTY::Command::ExitError
-      [] # Handle user pressing ESC in fzf
-    end
+      def select_items(paths, verbose)
+        cmd = TTY::Command.new(printer: verbose ? :pretty : :null)
+        fzf_input = paths.map { |p| p.gsub("'", "'\\''") }.join("\n")
+        result = cmd.run("echo '#{fzf_input}' | fzf --multi")
+        result.out.strip.split("\n")
+      rescue TTY::Command::ExitError
+        []
+      end
 
-    # Copy selected files' content to clipboard using cat or tail -n +1
-    def self.copy_files_to_clipboard(repo, selected_files, use_cat)
-      client = Octokit::Client.new(access_token: fetch_github_token)
+      def expand_selected_items(repo, selections, verbose)
+        client = Octokit::Client.new(access_token: fetch_github_token)
+        selections.each_with_object([]) do |selection, all_files|
+          item = client.contents(repo, path: selection)
+          if item.is_a?(Array)
+            all_files.concat(extract_files(repo, item))
+          elsif item[:type] == 'file'
+            all_files << selection
+          end
+        rescue Octokit::NotFound
+          puts "selected item not found: #{selection}" if verbose
+        end.uniq
+      end
 
-      contents = selected_files.map do |file|
-        file_content = client.contents(repo, path: file)[:content]
-        decoded_content = Base64.decode64(file_content)
-
-        if use_cat
-          decoded_content
-        else
-          `echo "#{decoded_content}" | tail -n +1`
+      def extract_files(repo, contents)
+        contents.each_with_object([]) do |item, files|
+          if item[:type] == 'dir'
+            dir_contents = Octokit.contents(repo, path: item[:path])
+            files.concat(extract_files(repo, dir_contents))
+          elsif item[:type] == 'file'
+            files << item[:path]
+          end
         end
-      end.join("\n")
+      end
 
-      Clipboard.copy(contents)
-      puts "Copied #{selected_files.size} file(s) to clipboard."
+      def copy_files_to_clipboard(repo, files, no_header, verbose)
+        client = Octokit::Client.new(access_token: fetch_github_token)
+        contents = files.map do |file|
+          file_content = client.contents(repo, path: file)[:content]
+          decoded_content = Base64.decode64(file_content)
+          header = "==> #{file} <==\n"
+          body = no_header ? decoded_content : decoded_content.lines.drop(1).join
+          header + body
+        end.join("\n\n")
+        Clipboard.copy(contents)
+        puts "copied #{files.size} file(s) to clipboard"
+      end
+
+      def verbose? = @verbose ||= false
     end
   end
 end
