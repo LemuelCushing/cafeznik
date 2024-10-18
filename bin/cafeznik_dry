@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+require_relative '../lib/cafeznik/cli_dry'
+require_relative '../dry_cli_extensions.rb'
+
+cli = Dry::CLI.new(Cafeznik::DryCLI::Commands)
+if ARGV.empty? || ARGV[0].start_with?('-')
+  # no command given, or first argument is an option, so we assume the user wants to run the main command
+  cli.call(arguments: ['main'] + ARGV)
+else
+  cli.call(arguments: ARGV)
+end
+
+
+# Dry::CLI.new(Cafeznik::DryCLI::Commands)
