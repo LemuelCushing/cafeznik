@@ -10,6 +10,8 @@ require 'fileutils'
 
 module Cafeznik
   class CLI < Thor
+    def self.exit_on_failure? = true
+
     class_option :verbose, type: :boolean, default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers from copied content"
     class_option :with_tree, type: :boolean, default: false, desc: "Include the tree structure in the content"
@@ -23,21 +25,23 @@ module Cafeznik
     MAX_LINES = 10_000
 
     def default
-      log.info "#{repo ? 'GitHub' : 'local'} mode"
+      log.info "#{github? ? 'GitHub' : 'local'} mode"
 
-      selected = select_files
-      copy_files_to_clipboard(selected)
+      select_files
+      copy_files_to_clipboard
     end
 
     private
 
-    # Accessors for options
     def repo = options[:repo]
     def verbose? = options[:verbose]
     def no_header? = options[:no_header]
     def with_tree? = options[:with_tree]
 
-    def tree = @_tree ||= repo ? github_tree : local_tree
+    def github? = !!repo
+    def tree = @_tree ||= github? ? github_tree : local_tree
+    
+    def selected_files = @selected_files || []
 
     def log
       @_logger ||= Logger.new($stdout).tap do |log|
@@ -61,40 +65,43 @@ module Cafeznik
       nil
     end
 
-    def client = @_client ||= Octokit::Client.new(access_token: github_token, auto_paginate: true)
+    def client = @_client ||= Octokit::Client.new(
+      access_token: github_token,
+      auto_paginate: true
+    )
 
     def github_tree
       default_branch = client.repository(repo).default_branch
-      tree = client.tree(repo, default_branch, recursive: true).tree
+      repo_tree = client.tree(repo, default_branch, recursive: true).tree
 
-      files = tree.select { _1.type == 'blob' }.map(&:path)
+      files = repo_tree.select { _1.type == 'blob' }.map(&:path)
       directories = files.map { File.dirname(_1) + "/" }
 
       (["./"] + files + directories).uniq.sort
     rescue Octokit::NotFound
-      log.error("Repository not found: #{repo}")
+      log.error "Repository not found: #{repo}" 
       exit 1
     rescue Octokit::Error => e
-      log.error("Error fetching file tree: #{e.message}")
+      log.error "Error fetching file tree: #{e.message}"
       exit 1
     end
 
     def local_tree
-      files = Dir.glob('**/*', File::FNM_DOTMATCH).reject { |f| File.directory?(f) }
+      files = Dir.glob('**/*').reject { |f| File.directory?(f) }
       directories = files.map { File.dirname(_1) + "/" }
 
       (["./"] + files + directories).uniq.sort
     end
 
     def select_files
-      log.debug("Initiating file selection with fzf.")
+      log.debug "Initiating file selection with fzf."
       cmd = TTY::Command.new(printer: verbose? ? :pretty : :null)
       fzf_input = tree.join("\n")
       result = cmd.run("echo \"#{fzf_input}\" | fzf --multi")
       paths = result.out.strip.split("\n")
-      log.info("User selected #{paths.size} item(s).")
+      log.info "User selected #{paths.size} item(s)."
 
-      selected_files = paths.flat_map do |item|
+      @selected_files = paths.flat_map do |item|
         if item == "./"
           tree.reject(&method(:directory?))
         else
@@ -104,12 +111,12 @@ module Cafeznik
 
       log.info("Resolved to #{selected_files.size} file(s).")
       if selected_files.size > MAX_FILES
-        log.warn("Warning: You selected more than #{MAX_FILES} files. Continue? (y/N)")
+        log.warn "Warning: You selected more than #{MAX_FILES} files. Continue? (y/N)"
         exit 0 unless STDIN.gets.strip.downcase == 'y'
       end
       selected_files
     rescue TTY::Command::ExitError
-      log.info("No items selected. Exiting.")
+      log.info "No items selected. Exiting."
       exit 0
     end
 
@@ -119,7 +126,7 @@ module Cafeznik
 
     def directory?(path) = path.end_with?('/')
 
-    def copy_files_to_clipboard(selected_files)
+    def copy_files_to_clipboard
       contents = selected_files.filter_map do |file|
         content = fetch_file_content(file)
         next unless content
@@ -136,14 +143,25 @@ module Cafeznik
       end
 
       Clipboard.copy(contents)
-      log.info("Copied #{selected_files.size} file(s) to clipboard - #{contents.lines.size} line(s).")
+      log.info "Copied #{selected_files.size} file(s) to clipboard - #{contents.lines.size} line(s)."
     end
 
-    def fetch_file_content(path)
+    def fetch_file_content(file)
+      github? ? fetch_github_file_content(file) : fetch_local_file_content(file)
+    end
+
+    def fetch_local_file_content(file)
+      File.read(file)
+    rescue Errno::ENOENT
+      log.error "File not found: #{file}"
+      nil
+    end
+
+    def fetch_github_file_content(path)
       content = client.contents(repo, path: path)[:content]
       Base64.decode64(content)
     rescue Octokit::Error => e
-      log.error("Error fetching content for #{path}: #{e.message}")
+      log.error "Error fetching content for #{path}: #{e.message}"
       nil
     end
   end
