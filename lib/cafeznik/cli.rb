@@ -40,7 +40,8 @@ module Cafeznik
 
       def parse_options(argv)
         Slop.parse(argv) do |o|
-          o.string '-r', '--repo', 'GitHub repository (owner/repo format)', required: true
+          o.banner = "Usage: cafeznik [options]"
+          o.string '-r', '--repo', 'GitHub repository (owner/repo format)'
           o.bool '-nh', '--no-header', 'Exclude headers from copied content'
           o.bool '-tr', '--with-tree', 'Include the tree structure in the content'
           o.bool '-v', '--verbose', 'Run in verbose mode'
@@ -106,15 +107,18 @@ module Cafeznik
           end
         end.uniq
 
+        logger.info("Resolved to #{@selected_files.size} file(s).")
         if @selected_files.size > MAX_FILES
           logger.warn("Warning: You selected more than #{MAX_FILES} files. Are you sure you want to continue? (y/N)")
           exit 0 unless STDIN.gets.strip.downcase == 'y'
         end
-        
-        logger.info("Resolved to #{@selected_files.size} file(s).")
       rescue TTY::Command::ExitError
         logger.info("No items selected. Exiting.")
         exit 0
+      rescue Errno::ENOENT => e
+        logger.error("Command not found: #{e.message}")
+        puts "Error: fzf command not found. Please install fzf to use this application."
+        exit 1
       rescue StandardError => e
         raise "Error selecting files: #{e.message}"
       end
