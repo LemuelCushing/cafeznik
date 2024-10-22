@@ -12,9 +12,9 @@ module Cafeznik
   class CLI < Thor
     def self.exit_on_failure? = true
 
-    class_option :verbose, type: :boolean, default: false, desc: "Run in verbose mode"
+    class_option :verbose, type: :boolean, aliases: "-v", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers from copied content"
-    class_option :with_tree, type: :boolean, default: false, desc: "Include the tree structure in the content"
+    class_option :with_tree, type: :boolean, aliases: "-t", default: false, desc: "Include the tree structure in the content"
     
     desc "default", "Default task: Select files, copy to clipboard; use --repo for GitHub repository"
     method_option :repo, type: :string, aliases: '-r', desc: "GitHub repository (owner/repo format)"
@@ -73,7 +73,6 @@ module Cafeznik
     def github_tree
       default_branch = client.repository(repo).default_branch
       repo_tree = client.tree(repo, default_branch, recursive: true).tree
-
       files = repo_tree.select { _1.type == 'blob' }.map(&:path)
       directories = files.map { File.dirname(_1) + "/" }
 
@@ -131,11 +130,11 @@ module Cafeznik
         content = fetch_file_content(file)
         next unless content
 
-        content.prepend("==> #{file} <==\n") unless no_header?
+        content.prepend header(file) unless no_header?
         content
       end.join("\n\n")
 
-      contents.prepend("==> File Tree <==\n #{tree.join("\n")}\n\n") if with_tree?
+      contents.prepend(header("Tree") + tree.join("\n") + "\n\n") if with_tree?
 
       if contents.lines.size > MAX_LINES
         puts "Warning: The total content exceeds #{MAX_LINES} lines. Continue? (y/N)"
@@ -164,5 +163,7 @@ module Cafeznik
       log.error "Error fetching content for #{path}: #{e.message}"
       nil
     end
+
+    def header(str) = "==> #{str} <==\n"
   end
 end
