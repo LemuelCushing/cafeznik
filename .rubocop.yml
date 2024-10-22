@@ -16,3 +16,6 @@ Metrics/BlockLength:
 
 Metrics/LineLength:
   Max: 160
+
+Performance/ChainArrayAllocation:
+  Enabled: false # caution to the wind

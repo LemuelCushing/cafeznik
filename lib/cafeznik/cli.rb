@@ -102,14 +102,17 @@ module Cafeznik
       result = cmd.run("echo \"#{fzf_input}\" | fzf --multi")
       paths = result.out.strip.split("\n")
       log.info "User selected #{paths.size} item(s)."
+      log.debug "Selected items: \n#{paths.each_with_index.map { |path, i| "\t#{i + 1}. #{path}" }.join("\n")}"
 
-      @selected_files = paths.flat_map do |item|
+      @selected_files = paths.filter_map do |item|
+        log.debug "Processing item: #{item}"
         if item == "./"
+          log.debug "Including all files in the current directory"
           tree.reject(&method(:directory?))
         else
           directory?(item) ? files_in_directory(item.chomp("/")) : item
         end
-      end.uniq
+      end.flatten.uniq
 
       log.info("Resolved to #{selected_files.size} file(s).")
       if selected_files.size > MAX_FILES
@@ -123,22 +126,26 @@ module Cafeznik
     end
 
     def files_in_directory(dir_path)
-      tree.select! { _1.start_with?("#{dir_path}/") }.reject!(&method(:directory?))
+      log.debug "Including all files in directory: #{dir_path}"
+      tree.select { |path| path.start_with?("#{dir_path}/") && !directory?(path) }
     end
 
     def directory?(path) = path.end_with?("/")
 
     def copy_files_to_clipboard
+      log.debug "Copying selected files to clipboard"
       contents = fetch_and_process_files.join("\n\n")
 
       contents.prepend(tree_header) if with_tree?
-      confirm_large_content(contents.lines.size) if lines_count > MAX_LINES
+      lines_count = contents.lines.size
+      confirm_large_content if lines_count > MAX_LINES
 
       Clipboard.copy(contents)
       log.info "Copied #{selected_files.size} file(s) to clipboard - #{lines_count} line(s)."
     end
 
     def fetch_and_process_files
+      log.debug "Fetching and processing selected files"
       selected_files.filter_map do |file|
         content = fetch_file_content(file)
         next unless content
@@ -150,16 +157,15 @@ module Cafeznik
 
     def tree_header = "#{header('Tree')}#{tree.join("\n")}\n\n"
 
-    def confirm_large_content(lines_count)
+    def confirm_large_content
       log.warn "Warning: The total content (#{lines_count} lines) exceeds #{MAX_LINES}. Continue? (y/N)"
       exit 0 unless $stdin.gets.strip.casecmp("y").zero?
     end
 
-    def fetch_file_content(file)
-      github? ? fetch_github_file_content(file) : fetch_local_file_content(file)
-    end
+    def fetch_file_content(file) = github? ? fetch_github_file_content(file) : fetch_local_file_content(file)
 
     def fetch_local_file_content(file)
+      log.debug "Fetching content for #{file}"
       File.read(file)
     rescue Errno::ENOENT
       log.error "File not found: #{file}"
