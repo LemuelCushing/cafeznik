@@ -1,0 +1,18 @@
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Naming/MemoizedInstanceVariableName:
+  EnforcedStyleForLeadingUnderscores: required
+
+Performance/MethodObjectAsBlock:
+  Enabled: false # I like em 🤷
+
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*' # no idea why rubocop-rspec/config/default.yml isnt excluding these
+
+Metrics/LineLength:
+  Max: 160

@@ -1,12 +1,12 @@
 #!/usr/bin/env ruby
 
-require 'thor'
-require 'tty-command'
-require 'octokit'
-require 'clipboard'
-require 'base64'
-require 'logger'
-require 'fileutils'
+require "thor"
+require "tty-command"
+require "octokit"
+require "clipboard"
+require "base64"
+require "logger"
+require "fileutils"
 
 module Cafeznik
   class CLI < Thor
@@ -14,11 +14,12 @@ module Cafeznik
 
     class_option :verbose, type: :boolean, aliases: "-v", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers from copied content"
-    class_option :with_tree, type: :boolean, aliases: "-t", default: false, desc: "Include the tree structure in the content"
-    
+    class_option :with_tree, type: :boolean, aliases: "-t", default: false,
+                             desc: "Include the tree structure in the content"
+
     desc "default", "Default task: Select files, copy to clipboard; use --repo for GitHub repository"
-    method_option :repo, type: :string, aliases: '-r', desc: "GitHub repository (owner/repo format)"
-    
+    method_option :repo, type: :string, aliases: "-r", desc: "GitHub repository (owner/repo format)"
+
     default_task :default
 
     MAX_FILES = 20
@@ -40,18 +41,20 @@ module Cafeznik
 
     def github? = !!repo
     def tree = @_tree ||= github? ? github_tree : local_tree
-    
+
     def selected_files = @selected_files || []
 
-    def log
+    def logger
       @_logger ||= Logger.new($stdout).tap do |log|
         log.level = verbose? ? Logger::DEBUG : Logger::INFO
         log.formatter = proc { |severity, _, _, msg| "[#{severity}] #{msg}\n" }
       end
     end
 
+    alias log logger
+
     def github_token
-      @_github_token ||= ENV['GITHUB_TOKEN'] || gh_token || (log.error("GitHub token not found") && exit(1))
+      @_github_token ||= ENV["GITHUB_TOKEN"] || gh_token || (log.error("GitHub token not found") && exit(1))
     end
 
     def gh_token
@@ -73,12 +76,12 @@ module Cafeznik
     def github_tree
       default_branch = client.repository(repo).default_branch
       repo_tree = client.tree(repo, default_branch, recursive: true).tree
-      files = repo_tree.select { _1.type == 'blob' }.map(&:path)
-      directories = files.map { File.dirname(_1) + "/" }
+      files = repo_tree.select! { _1.type == "blob" }.map!(&:path)
+      directories = files.map { "#{File.dirname(_1)}/" }
 
-      (["./"] + files + directories).uniq.sort
+      (["./"] + files + directories).uniq!.sort!
     rescue Octokit::NotFound
-      log.error "Repository not found: #{repo}" 
+      log.error "Repository not found: #{repo}"
       exit 1
     rescue Octokit::Error => e
       log.error "Error fetching file tree: #{e.message}"
@@ -86,10 +89,10 @@ module Cafeznik
     end
 
     def local_tree
-      files = Dir.glob('**/*').reject { |f| File.directory?(f) }
-      directories = files.map { File.dirname(_1) + "/" }
+      files = Dir.glob("**/*").reject { |f| File.directory?(f) }
+      directories = files.map { "#{File.dirname(_1)}/" }
 
-      (["./"] + files + directories).uniq.sort
+      (["./"] + files + directories).uniq!.sort!
     end
 
     def select_files
@@ -104,14 +107,14 @@ module Cafeznik
         if item == "./"
           tree.reject(&method(:directory?))
         else
-          directory?(item) ? files_in_directory(item.chomp('/')) : item
+          directory?(item) ? files_in_directory(item.chomp("/")) : item
         end
       end.uniq
 
       log.info("Resolved to #{selected_files.size} file(s).")
       if selected_files.size > MAX_FILES
         log.warn "Warning: You selected more than #{MAX_FILES} files. Continue? (y/N)"
-        exit 0 unless STDIN.gets.strip.downcase == 'y'
+        exit 0 unless $stdin.gets.strip.casecmp("y").zero?
       end
       selected_files
     rescue TTY::Command::ExitError
@@ -120,29 +123,36 @@ module Cafeznik
     end
 
     def files_in_directory(dir_path)
-      tree.select { _1.start_with?("#{dir_path}/") }.reject(&method(:directory?))
+      tree.select! { _1.start_with?("#{dir_path}/") }.reject!(&method(:directory?))
     end
 
-    def directory?(path) = path.end_with?('/')
+    def directory?(path) = path.end_with?("/")
 
     def copy_files_to_clipboard
-      contents = selected_files.filter_map do |file|
+      contents = fetch_and_process_files.join("\n\n")
+
+      contents.prepend(tree_header) if with_tree?
+      confirm_large_content(contents.lines.size) if lines_count > MAX_LINES
+
+      Clipboard.copy(contents)
+      log.info "Copied #{selected_files.size} file(s) to clipboard - #{lines_count} line(s)."
+    end
+
+    def fetch_and_process_files
+      selected_files.filter_map do |file|
         content = fetch_file_content(file)
         next unless content
 
-        content.prepend header(file) unless no_header?
+        content.prepend(header(file)) unless no_header?
         content
-      end.join("\n\n")
-
-      contents.prepend(header("Tree") + tree.join("\n") + "\n\n") if with_tree?
-
-      if contents.lines.size > MAX_LINES
-        puts "Warning: The total content exceeds #{MAX_LINES} lines. Continue? (y/N)"
-        exit 0 unless STDIN.gets.strip.downcase == 'y'
       end
+    end
 
-      Clipboard.copy(contents)
-      log.info "Copied #{selected_files.size} file(s) to clipboard - #{contents.lines.size} line(s)."
+    def tree_header = "#{header('Tree')}#{tree.join("\n")}\n\n"
+
+    def confirm_large_content(lines_count)
+      log.warn "Warning: The total content (#{lines_count} lines) exceeds #{MAX_LINES}. Continue? (y/N)"
+      exit 0 unless $stdin.gets.strip.casecmp("y").zero?
     end
 
     def fetch_file_content(file)
@@ -157,7 +167,7 @@ module Cafeznik
     end
 
     def fetch_github_file_content(path)
-      content = client.contents(repo, path: path)[:content]
+      content = client.contents(repo, path:)[:content]
       Base64.decode64(content)
     rescue Octokit::Error => e
       log.error "Error fetching content for #{path}: #{e.message}"

@@ -8,4 +8,3 @@ RSpec.shared_context "cli" do
     $stdout = original_stdout
   end
 end
-
