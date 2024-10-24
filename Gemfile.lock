@@ -116,7 +116,7 @@ DEPENDENCIES
   octokit
   rspec
   rubocop
-  rubocop-rspec (>= 2.10.0)
+  rubocop-rspec
   standard (>= 1.35.1)
   thor
   tty-command
