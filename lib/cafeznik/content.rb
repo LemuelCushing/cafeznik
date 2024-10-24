@@ -30,7 +30,7 @@ module Cafeznik
       end.join("\n\n")
     end
 
-    def tree_section = @include_tree ? with_header(@source.tree.join("\n"), "Tree") : nil
+    def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
 
     def confirm_size!(content)
