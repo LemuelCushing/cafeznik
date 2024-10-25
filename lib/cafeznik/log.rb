@@ -6,6 +6,7 @@ module Cafeznik
 
     def verbose=(value)
       @verbose = value
+      logger.level = value ? Logger::DEBUG : Logger::INFO
     end
 
     def verbose?
