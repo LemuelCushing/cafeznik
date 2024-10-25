@@ -8,7 +8,9 @@ module Cafeznik
       def all_files = tree.reject { |path| File.directory?(path) }
 
       # TODO: check if this doubles the slashes (//)
-      def expand_dir(path) = Dir.glob("#{path}/**/*").reject { |p| File.directory?(p) }
+      def expand_dir(path) = Dir.glob("#{path.chomp('/')}/**/*").reject { |p| File.directory?(p) }
+
+      def dir?(path) = File.directory?(path)
 
       def content(path)
         File.read(path)

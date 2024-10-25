@@ -47,6 +47,6 @@ module Cafeznik
       paths
     end
 
-    def dir?(path) = path.end_with?("/")
+    def dir?(path) = @source.dir?(path)
   end
 end
