@@ -14,13 +14,10 @@ module Cafeznik
     default_task :default
 
     def default
-      repo = options[:repo]
-
       Log.verbose = options[:verbose]
       Log.info "Running in #{repo ? 'GitHub' : 'local'} mode"
 
-      source = repo ? Source::GitHub.new(repo) : Source::Local.new
-      files = Selector.new(source).select
+      files = selector.select
 
       Content.new(
         source:,
@@ -29,5 +26,11 @@ module Cafeznik
         include_tree: options[:with_tree]
       ).copy_to_clipboard
     end
+
+    private
+
+    def repo = options[:repo]
+    def source = repo ? Source::GitHub.new(repo) : Source::Local.new
+    def selector = Selector.new(source)
   end
 end

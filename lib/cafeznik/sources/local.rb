@@ -5,9 +5,9 @@ module Cafeznik
   module Source
     class Local < Base
       def tree
-        @_tree ||= Dir.glob("**/*", File::FNM_DOTMATCH)
-                      .select { |path| gitignore.allowed?(path, include_directories: true) }
-                      .sort
+        @_tree ||= ["./"] + Dir.glob("**/*", File::FNM_DOTMATCH)
+                               .select { |path| gitignore.allowed?(path, include_directories: true) }
+                               .sort
       end
 
       def all_files = tree.reject { |path| File.directory?(path) }

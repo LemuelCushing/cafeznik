@@ -11,9 +11,9 @@ RSpec.describe Cafeznik::CLI do
 
   before do
     allow(Cafeznik::Selector).to receive(:new).and_return(mock_selector)
-    allow(Cafeznik::Content).to receive(:new).and_return(mock_content)
     allow(mock_selector).to receive(:select).and_return(["file1.txt"])
     allow(mock_content).to receive(:copy_to_clipboard)
+    allow(Cafeznik::Content).to receive(:new).and_return(mock_content)
     allow(Cafeznik::Log).to receive(:logger).and_return(Logger.new(logger_output))
   end
 
@@ -21,6 +21,7 @@ RSpec.describe Cafeznik::CLI do
 
   context "with --repo option" do
     let(:args) { ["default", "--repo", "owner/repo"] }
+
     it_behaves_like "a CLI command", "GitHub"
   end
 
@@ -37,10 +38,7 @@ RSpec.describe Cafeznik::CLI do
 
     it "enables verbose logging" do
       allow(Cafeznik::Log).to receive(:verbose=).and_call_original
-      allow(Cafeznik::Log).to receive(:debug).with("Verbose mode enabled")
-
       described_class.start(["default", "--verbose"])
-
       expect(Cafeznik::Log).to have_received(:verbose=).with(true)
     end
   end

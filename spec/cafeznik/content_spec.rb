@@ -30,7 +30,7 @@ RSpec.describe Cafeznik::Content do
     end
 
     context "with tree" do
-      let(:params) { base_params.merge(include_tree: true) }
+      let(:params) { base_params.merge(include_tree: true) } # TODO: see if there is an even more elegant way to modify the params
 
       it "includes tree in content" do
         content.copy_to_clipboard
