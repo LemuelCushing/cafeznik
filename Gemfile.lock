@@ -118,6 +118,7 @@ DEPENDENCIES
   octokit
   rspec
   rubocop
+  rubocop-performance
   rubocop-rspec
   standard (>= 1.35.1)
   thor
