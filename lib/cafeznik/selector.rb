@@ -16,8 +16,9 @@ module Cafeznik
     private
 
     def run_fzf
-      Log.debug "calling fzf"
+      Log.debug "Initializing fzf command"
       cmd = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
+      Log.debug "Running fzf"
       selected = cmd.run("echo \"#{@source.tree.join("\n")}\" | fzf --multi").out.split("\n")
       selected.include?("./") ? ["./"] : selected
     rescue TTY::Command::ExitError
