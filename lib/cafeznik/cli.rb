@@ -7,6 +7,7 @@ module Cafeznik
     class_option :verbose, type: :boolean, aliases: "-v", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers"
     class_option :with_tree, type: :boolean, aliases: "-t", default: false, desc: "Include file tree"
+    class_option :grep, type: :string, aliases: "-g", desc: "Filter files containing the specified content"
 
     desc "default", "Select files, copy to clipboard; use --repo/-r for GitHub repository"
     method_option :repo, type: :string, aliases: "-r", desc: "GitHub repository (owner/repo format)"
@@ -30,7 +31,8 @@ module Cafeznik
     private
 
     def repo = options[:repo]
-    def source = repo ? Source::GitHub.new(repo) : Source::Local.new
+    def grep = options[:grep]
+    def source = repo ? Source::GitHub.new(repo:) : Source::Local.new(grep:)
     def selector = Selector.new(source)
   end
 end

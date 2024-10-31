@@ -4,23 +4,20 @@ require "tty-command"
 module Cafeznik
   module Source
     class Local < Base
+      def initialize(grep: nil)
+        super
+      end
+
       def tree
-        Log.debug "Building file tree with fd command"
+        return @_tree if defined?(@_tree)
 
-        raise "fd not available" unless fd_available?
+        Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}"
 
-        cmd = TTY::Command.new(printer: :null)
-        result = cmd.run("fd", ".", "--hidden", "--type", "f", "--type", "d", "--exclude", ".git", "--exclude", "node_modules", "--exclude", "vendor")
-
-        @_tree ||= ["./"] + result.out.split("\n").sort
-      rescue TTY::Command::ExitError => e
-        Log.error "Failed to build file tree with fd: #{e.message}"
-        []
+        files = @grep ? grep_filtered_files : all_files_from_fd
+        @_tree = ["./"] + files.sort
       end
 
-      def all_files
-        tree.reject { |path| File.directory?(path) }
-      end
+      def all_files = tree.reject { |path| path.end_with?("/") }
 
       def expand_dir(path)
         Log.debug "Expanding directory: #{path}"
@@ -33,11 +30,8 @@ module Cafeznik
         []
       end
 
-      def dir?(path)
-        File.directory?(path)
-      end
+      def dir?(path) = File.directory?(path)
 
-      # TODO: rename to file_contents
       def content(path)
         File.read(path)
       rescue Errno::ENOENT
@@ -47,7 +41,27 @@ module Cafeznik
 
       private
 
+      def all_files_from_fd
+        cmd = TTY::Command.new(printer: :null)
+        result = cmd.run("fd", ".", "--hidden", "--follow", "--exclude", ".git", "--exclude", "node_modules", "--exclude", "vendor")
+        result.out.split("\n")
+      rescue TTY::Command::ExitError => e
+        Log.error "Failed to build file tree with fd: #{e.message}"
+        []
+      end
+
+      def grep_filtered_files
+        cmd = TTY::Command.new(printer: :null)
+        result = cmd.run("rg", "--files-with-matches", @grep, ".").out.split("\n")
+        Log.debug "Found #{result.size} files matching '#{@grep}'"
+        result
+      rescue TTY::Command::ExitError => e
+        Log.warn "Error running rg: #{e.message}"
+        []
+      end
+
       def fd_available? = system("command -v fd > /dev/null 2>&1")
+      # TODO: add rg check
     end
   end
 end

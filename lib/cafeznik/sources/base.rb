@@ -1,7 +1,12 @@
 module Cafeznik
   module Source
     class Base
-      def initialize(repo: nil) = @repo = repo # TODO: change to `root: nil, repo: nil`
+      # TODO: change to `root: nil, repo: nil`
+      def initialize(repo: nil, grep: nil)
+        @repo = repo
+        @grep = grep
+      end
+
       def tree = raise NotImplementedError
       def all_files = raise NotImplementedError
       def expand_dir(_) = raise NotImplementedError

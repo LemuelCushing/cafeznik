@@ -6,24 +6,24 @@ require_relative "../log"
 module Cafeznik
   module Source
     class GitHub < Base
-      def initialize(repo)
+      def initialize(repo:)
         # super
-        super(repo:)
+        super
         @client = Octokit::Client.new(access_token:, auto_paginate: true)
         # TODO: extract to client and get token from GH
       end
 
       def tree
-        @_tree ||= begin
-          branch = @client.repository(@repo).default_branch
-          files = @client.tree(@repo, branch, recursive: true).tree
-          paths = files.filter_map { _1.path if _1.type == "blob" }
-          directories = paths.map { "#{File.dirname(_1)}/" }
-          (["./"] + paths + directories).uniq.sort # TODO: sort properly
-        rescue Octokit::Error => e
-          Log.error "Error fetching GitHub tree: #{e.message}"
-          nil
-        end
+        return @_tree if defined?(@_tree)
+
+        branch = @client.repository(@repo).default_branch
+        files = @client.tree(@repo, branch, recursive: true).tree
+        paths = files.filter_map { _1.path if _1.type == "blob" }
+        directories = paths.map { "#{File.dirname(_1)}/" }
+        @_tree = (["./"] + paths + directories).uniq.sort # TODO: sort properly
+      rescue Octokit::Error => e
+        Log.error "Error fetching GitHub tree: #{e.message}"
+        nil
       end
 
       def all_files = tree.reject { |path| path.end_with?("/") }
