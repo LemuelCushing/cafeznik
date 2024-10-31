@@ -1,3 +1,4 @@
 .vscode
 spec/examples.txt
 spec/vcr_cassettes
+*.gem

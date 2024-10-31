@@ -1,0 +1,52 @@
+Copy/
+├── .gitignore
+├── .hidden_root_file
+├── regular_file.txt
+├── with space.txt
+├── with_special!@#.txt
+├── with_unicode_éñ.txt
+├── very_long_file_name_that_goes_on_and_on_and_on.txt
+├── folder1/
+│   ├── .hidden_subfolder_file
+│   ├── file.txt
+│   └── ignored_file.log
+├── folder2/
+│   ├── file.txt        # Same name as in folder1
+│   └── unique.txt
+├── empty_folder/
+├── nested/
+│   ├── subfolder/
+│   │   ├── deep_file.txt
+│   │   └── empty_folder/
+│   └── another_file.txt
+├── ignored_folder/
+│   └── should_not_appear.txt
+├── special_chars/ 
+│   ├── αβγδε.txt
+│   ├── with!@#$%^&.txt
+│   └── お早うございます.txt
+├── deep_nest/
+│   └── level1/
+│       └── level2/
+│           └── level3/
+│               └── level4/
+│                   └── deep_file.txt
+├── symlinks/
+│   ├── link_to_file.txt -> ../regular_file.txt
+│   ├── link_to_folder -> ../folder1
+│   ├── link_to_sibling -> ./another_link
+│   └── link_to_deep -> ../deep_nest/level1
+├── content_cases/
+│   ├── empty.txt
+│   ├── big_file.txt        # Approaching size limits
+│   ├── utf16_file.txt      # UTF-16 encoded
+│   ├── binary.bin          # Binary content
+│   └── mixed_endings.txt   # Mix of CRLF and LF
+├── dots.in.path/
+│   └── file.txt
+├── no_extension
+├── multiple.dots.in.file.name.txt
+└── very.long.folder.name.that.goes.on.and.on.and.on/
+    └── file.txt
+
+    
