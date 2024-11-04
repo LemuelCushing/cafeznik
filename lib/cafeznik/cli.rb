@@ -20,7 +20,7 @@ module Cafeznik
 
       files = selector.select
 
-      Content.new(
+      Content.new( # TODO: find better name than Content, perhaps Clipboard?
         source:,
         files:,
         include_headers: !options[:no_header],
@@ -32,7 +32,7 @@ module Cafeznik
 
     def repo = options[:repo]
     def grep = options[:grep]
-    def source = repo ? Source::GitHub.new(repo:) : Source::Local.new(grep:)
-    def selector = Selector.new(source)
+    def source = @_source ||= repo ? Source::GitHub.new(repo:, grep:) : Source::Local.new(grep:)
+    def selector = @_selector ||= Selector.new(source)
   end
 end
