@@ -45,8 +45,7 @@ module Cafeznik
 
       def fetch_token_via_gh
         Log.debug("Fetching GitHub token via GitHub CLI")
-        token = TTY::Command.new(printer: :null).run("gh auth token").out.strip
-        token.presence || (Log.warn("GitHub token not found via GitHub CLI") && nil)
+        TTY::Command.new(printer: :null).run("gh auth token").out.strip
       rescue TTY::Command::ExitError
         Log.warn("Failed to fetch GitHub token via GitHub CLI. Install GH and authenticate with `gh auth login`, or set GITHUB_TOKEN in your environment")
         nil

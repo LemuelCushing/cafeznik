@@ -4,9 +4,9 @@ module Cafeznik
   class Content
     MAX_LINES = 10_000
 
-    def initialize(source:, files:, include_headers:, include_tree:)
+    def initialize(source:, file_paths:, include_headers:, include_tree:)
       @source = source
-      @files = files
+      @file_paths = file_paths
       @include_headers = include_headers
       @include_tree = include_tree
     end
@@ -15,7 +15,7 @@ module Cafeznik
       content = build_content.tap(&method(:confirm_size!))
 
       ::Clipboard.copy(content)
-      Log.info "Copied #{@files.size} files to clipboard"
+      Log.info "Copied #{content.lines.size} lines across #{@file_paths.size} files to clipboard"
     end
 
     private
@@ -23,8 +23,8 @@ module Cafeznik
     def build_content = [tree_section, file_contents].compact.join("\n\n")
 
     def file_contents
-      Log.debug "Processing #{@files.size} files"
-      @files.filter_map do |file|
+      Log.debug "Processing #{@file_paths.size} files"
+      @file_paths.filter_map do |file|
         content = @source.content(file)
         @include_headers ? with_header(content, file) : content
       end.join("\n\n")
@@ -34,10 +34,10 @@ module Cafeznik
     def with_header(content, title) = "==> #{title} <==\n#{content}"
 
     def confirm_size!(content)
-      lines = content.lines.size
-      return if lines <= MAX_LINES
+      line_count = content.lines.size
+      return if line_count <= MAX_LINES
 
-      Log.warn "Content exceeds #{MAX_LINES} lines (#{lines}). Continue? (y/N)"
+      Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Continue? (y/N)"
       exit 0 unless $stdin.gets.strip.casecmp("y").zero?
     end
   end

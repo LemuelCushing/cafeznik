@@ -13,7 +13,7 @@ module Cafeznik
 
         Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}"
 
-        files = @grep ? grep_filtered_files : all_files_from_fd
+        files = @grep ? grep_filtered_files : full_tree
         @_tree = ["./"] + files.sort
       end
 
@@ -41,7 +41,7 @@ module Cafeznik
 
       private
 
-      def all_files_from_fd
+      def full_tree
         cmd = TTY::Command.new(printer: :null)
         result = cmd.run("fd", ".", "--hidden", "--follow", "--exclude", ".git", "--exclude", "node_modules", "--exclude", "vendor")
         result.out.split("\n")

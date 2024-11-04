@@ -18,11 +18,11 @@ module Cafeznik
       Log.verbose = options[:verbose]
       Log.info "Running in #{repo ? 'GitHub' : 'local'} mode"
 
-      files = selector.select
+      file_paths = selector.select
 
       Content.new( # TODO: find better name than Content, perhaps Clipboard?
         source:,
-        files:,
+        file_paths:,
         include_headers: !options[:no_header],
         include_tree: options[:with_tree]
       ).copy_to_clipboard

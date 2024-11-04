@@ -33,10 +33,9 @@ module Cafeznik
     end
 
     def expand_paths(paths)
-      if paths == ["./"] then @source.all_files
-      else
-        paths.flat_map { |path| dir?(path) ? @source.expand_dir(path) : path }
-      end
+      return @source.all_files if paths == ["./"]
+
+      paths.flat_map { |path| dir?(path) ? @source.expand_dir(path) : path }.uniq
     end
 
     def confirm_count!(paths)
