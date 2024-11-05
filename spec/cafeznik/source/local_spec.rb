@@ -3,37 +3,91 @@ require "spec_helper"
 RSpec.describe Cafeznik::Source::Local do
   subject(:source) { described_class.new }
 
-  let(:mock_files) { ["file1.txt", "dir/", "dir/file2.txt"] }
-  let(:mock_gitignore) { instance_double(FastIgnore) }
-
-  before do
-    allow(Dir).to receive(:glob).with("**/*", File::FNM_DOTMATCH).and_return(mock_files)
-    allow(File).to receive(:directory?) { |path| path.end_with?("/") }
-    allow(File).to receive(:read).and_return("test content")
-    allow(FastIgnore).to receive(:new).and_return(mock_gitignore)
-    allow(mock_gitignore).to receive(:allowed?).and_return(true)
+  around do |example|
+    with_test_fs { example.run }
   end
 
   it_behaves_like "a source"
 
+  describe "#tree" do
+    it "returns all files and directories" do
+      tree = source.tree
+
+      expect(tree).to include("./")
+      expect(tree).to include("src/main.rb")
+      expect(tree).to include("src/lib/")
+      expect(tree).to include("docs/latest")
+    end
+
+    it "respects gitignore" do
+      tree = source.tree
+
+      expect(tree).not_to include("build/main.o")
+      expect(tree).not_to include(".env")
+      expect(tree).not_to include("temp/")
+    end
+
+    it "handles special characters in paths" do
+      expect(source.tree).to include("src/with spaces.rb")
+      expect(source.tree).to include("src/special!@#.rb")
+      expect(source.tree).to include("src/utf8_χξς.rb")
+    end
+  end
+
+  describe "#content" do
+    it "reads file content" do
+      expect(source.content("README.md")).to include("Test Project")
+    end
+
+    it "handles binary files" do
+      content = source.content("test/binary.dat")
+      expect(content.encoding).to eq(Encoding::ASCII_8BIT)
+      expect(content).not_to be_empty
+    end
+
+    it "preserves file encodings" do
+      content = source.content("test/utf16.txt")
+      expect(content.encode("UTF-8")).to eq("Hello World")
+    end
+
+    it "handles mixed line endings" do
+      content = source.content("test/mixed_endings.txt")
+      expect(content).to include("\r\n")
+      expect(content).to include("\n")
+    end
+  end
+
   describe "#expand_dir" do
-    before do
-      allow(Dir).to receive(:glob).with("dir/**/*", File::FNM_DOTMATCH).and_return(["dir/file2.txt"])
-      allow(mock_gitignore).to receive(:allowed?).with("dir/file2.txt").and_return(true)
+    it "returns all files in directory" do
+      files = source.expand_dir("src/lib")
+
+      expect(files).to include("src/lib/helper.rb")
+      expect(files).to include("src/lib/nested/deep.rb")
     end
 
-    it "expands directory contents" do
-      expect(source.expand_dir("dir")).to eq(["dir/file2.txt"])
+    it "follows symlinks" do
+      files = source.expand_dir("docs/latest")
+      expect(files).not_to be_empty
     end
 
-    context "with ignored files" do
-      before do
-        allow(mock_gitignore).to receive(:allowed?).with("dir/file2.txt").and_return(false)
-      end
+    it "respects gitignore in subdirectories" do
+      files = source.expand_dir("build")
+      expect(files).to be_empty
+    end
+  end
 
-      it "excludes ignored files" do
-        expect(source.expand_dir("dir")).to be_empty
-      end
+  describe "#all_files" do
+    it "returns only files, not directories" do
+      files = source.all_files
+
+      expect(files).to include("README.md")
+      expect(files).to include("src/main.rb")
+      expect(files).not_to include("src/")
+      expect(files).not_to include("src/lib/")
+    end
+
+    it "includes hidden files not in gitignore" do
+      expect(source.all_files).to include(".config/settings.yml")
     end
   end
 end

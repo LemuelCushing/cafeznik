@@ -1,9 +1,9 @@
 require "webmock/rspec"
 require "vcr"
-require_relative "../lib/cafeznik" # Load the entire library instead of just CLI
+require_relative "../lib/cafeznik"
+require "fakefs/spec_helpers"
 
-# Load all support files
-Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require f }
+Dir[File.expand_path("support/**/*.rb", __dir__)].each { |f| require f }
 
 WebMock.disable_net_connect!(allow_localhost: true)
 
@@ -12,6 +12,9 @@ RSpec.configure do |config|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
     expectations.syntax = :expect
   end
+
+  config.include FakeFS::SpecHelpers, fakefs: true
+  config.include Cafeznik::Testing::Filesystem
 
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = false # Sawyer::Resource is a dynamic object, so we can't verify partial doubles. I think.
@@ -31,5 +34,5 @@ VCR.configure do |config|
   config.cassette_library_dir = "spec/vcr_cassettes"
   config.hook_into :webmock
   config.configure_rspec_metadata!
-  config.filter_sensitive_data("<GITHUB_TOKEN>") { ENV["GITHUB_TOKEN"] }
+  config.filter_sensitive_data("<GITHUB_TOKEN>") { ENV.fetch("GITHUB_TOKEN", nil) }
 end
