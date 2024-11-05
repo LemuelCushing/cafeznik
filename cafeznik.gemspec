@@ -1,7 +1,7 @@
 # cafeznik.gemspec
 Gem::Specification.new do |spec|
   spec.name          = "cafeznik"
-  spec.version       = "0.1.0"
+  spec.version       = "0.4.0"
   spec.authors       = ["Lem"]
   spec.summary       = "A CLI tool for managing files and directories"
   spec.description   = "CLI tool for handling files and directories locally and remotely."

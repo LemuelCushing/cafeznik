@@ -24,7 +24,7 @@ module Cafeznik
         cmd = TTY::Command.new(printer: :null)
         result = cmd.run("fd", ".", path.chomp("/"), "--hidden", "--no-ignore", "--type", "f")
 
-        result.out.split("\n").sort
+        result.out.split("\n").sort.uniq
       rescue TTY::Command::ExitError => e
         Log.error "Failed to expand directory with fd: #{e.message}"
         []
