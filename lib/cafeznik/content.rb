@@ -5,6 +5,9 @@ module Cafeznik
     MAX_LINES = 10_000
 
     def initialize(source:, file_paths:, include_headers:, include_tree:)
+      Log.debug "Initializing Content" do
+        "Source: #{source}\n file_paths: #{file_paths}\n include_headers: #{include_headers}\n include_tree: #{include_tree}\n"
+      end
       @source = source
       @file_paths = file_paths
       @include_headers = include_headers
@@ -12,6 +15,7 @@ module Cafeznik
     end
 
     def copy_to_clipboard
+      Log.debug "Copying content to clipboard"
       content = build_content.tap(&method(:confirm_size!))
 
       ::Clipboard.copy(content)

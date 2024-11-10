@@ -8,19 +8,20 @@ module Cafeznik
       @source = source
     end
 
-    def select = run_fzf
+    def select = (@source.tree.empty? ? skip_selection : run_fzf)
       .tap(&method(:log_selection))
       .then { |paths| expand_paths(paths) }
       .tap { |expanded| confirm_count!(expanded) }
 
     private
 
+    def skip_selection = Log.info("No matching files found; skipping file selection.") && []
+
     def run_fzf
-      Log.debug "Initializing fzf command"
       cmd = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
       Log.debug "Running fzf"
       selected = cmd.run("echo \"#{@source.tree.join("\n")}\" | fzf --multi").out.split("\n")
-      selected.include?("./") ? ["./"] : selected
+      selected.include?("./") ? [:all_files] : selected
     rescue TTY::Command::ExitError
       Log.info "No files selected, exiting."
       exit 0
@@ -33,7 +34,7 @@ module Cafeznik
     end
 
     def expand_paths(paths)
-      return @source.all_files if paths == ["./"]
+      return @source.all_files if paths == [:all_files]
 
       paths.flat_map { |path| dir?(path) ? @source.expand_dir(path) : path }.uniq
     end
