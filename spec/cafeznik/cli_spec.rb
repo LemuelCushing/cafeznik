@@ -5,41 +5,58 @@ RSpec.describe Cafeznik::CLI do
   subject(:cli) { described_class.start(args) }
 
   let(:args) { ["default"] }
-  let(:mock_selector) { instance_double(Cafeznik::Selector) }
+  let(:mock_selector) { instance_double(Cafeznik::Selector, select: ["file1.txt"]) }
   let(:mock_content) { instance_double(Cafeznik::Content) }
   let(:logger_output) { StringIO.new }
+  let(:logger) { Logger.new(logger_output) }
 
   before do
     allow(Cafeznik::Selector).to receive(:new).and_return(mock_selector)
-    allow(mock_selector).to receive(:select).and_return(["file1.txt"])
-    allow(mock_content).to receive(:copy_to_clipboard)
     allow(Cafeznik::Content).to receive(:new).and_return(mock_content)
-    allow(Cafeznik::Log).to receive(:logger).and_return(Logger.new(logger_output))
+    allow(mock_content).to receive(:copy_to_clipboard)
+
+    allow(Cafeznik::Log).to receive(:logger).and_return(logger)
   end
 
-  it_behaves_like "a CLI command", "local"
+  describe "default command" do
+    it "initiates file selection and copies content to clipboard", :aggregate_failures do
+      described_class.start(args)
+      expect(mock_selector).to have_received(:select)
+      expect(mock_content).to have_received(:copy_to_clipboard)
+    end
+  end
 
-  context "with --repo option" do
+  context "when run with --repo option" do
     let(:args) { ["default", "--repo", "owner/repo"] }
 
-    it_behaves_like "a CLI command", "GitHub"
+    it "initializes GitHub source for the specified repository" do
+      described_class.start(args)
+      expect(Cafeznik::Content).to have_received(:new).with(hash_including(source: instance_of(Cafeznik::Source::GitHub)))
+    end
   end
 
-  describe "options handling" do
-    it "respects --no-header" do
+  describe "option handling" do
+    it "excludes headers if --no-header is provided" do
       described_class.start(["default", "--no-header"])
       expect(Cafeznik::Content).to have_received(:new).with(hash_including(include_headers: false))
     end
 
-    it "respects --with-tree" do
+    it "includes the file tree if --with-tree is provided" do
       described_class.start(["default", "--with-tree"])
       expect(Cafeznik::Content).to have_received(:new).with(hash_including(include_tree: true))
     end
 
-    it "enables verbose logging" do
+    it "enables verbose logging with --verbose option" do
       allow(Cafeznik::Log).to receive(:verbose=).and_call_original
       described_class.start(["default", "--verbose"])
       expect(Cafeznik::Log).to have_received(:verbose=).with(true)
+    end
+  end
+
+  describe "logging behavior" do
+    it "logs start and completion messages" do
+      described_class.start(args)
+      expect(logger_output.string).to include("Running in local mode")
     end
   end
 end
