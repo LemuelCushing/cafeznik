@@ -1,9 +1,7 @@
 require "webmock/rspec"
-require "vcr"
 require_relative "../lib/cafeznik"
-require "fakefs/spec_helpers"
 
-Dir[File.expand_path("support/**/*.rb", __dir__)].each { |f| require f }
+Dir[File.expand_path("support/**/*.rb", __dir__)].each { |f| require f } # TODO: remove this if not needed
 
 WebMock.disable_net_connect!(allow_localhost: true)
 
@@ -12,9 +10,6 @@ RSpec.configure do |config|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
     expectations.syntax = :expect
   end
-
-  config.include FakeFS::SpecHelpers, fakefs: true
-  config.include Cafeznik::Testing::Filesystem
 
   config.mock_with :rspec do |mocks|
     mocks.verify_partial_doubles = false # Sawyer::Resource is a dynamic object, so we can't verify partial doubles. I think.
@@ -25,14 +20,7 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.order = :random
 
-  # Add default metadata for spec directories
-  config.define_derived_metadata(file_path: %r{/spec/cli/}) { |metadata| metadata[:type] ||= :cli }
-  config.define_derived_metadata(file_path: %r{/spec/sources/}) { |metadata| metadata[:type] ||= :source }
-end
-
-VCR.configure do |config|
-  config.cassette_library_dir = "spec/vcr_cassettes"
-  config.hook_into :webmock
-  config.configure_rspec_metadata!
-  config.filter_sensitive_data("<GITHUB_TOKEN>") { ENV.fetch("GITHUB_TOKEN", nil) }
+  # Add default metadata for spec directories TODO: remove this if not needed
+  # config.define_derived_metadata(file_path: %r{/spec/cli/}) { |metadata| metadata[:type] ||= :cli }
+  # config.define_derived_metadata(file_path: %r{/spec/sources/}) { |metadata| metadata[:type] ||= :source }
 end
