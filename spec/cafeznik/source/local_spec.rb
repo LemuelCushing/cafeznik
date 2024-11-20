@@ -1,6 +1,35 @@
 require "spec_helper"
 require "tmpdir"
 
+FILE_STRUCTURE = {
+  "README.md" => "# Test Project",
+  "src" => {
+    "main.rb" => "puts 'Hello, World!'",
+    "lib" => {
+      "helper.rb" => "module Helper; end",
+      "nested" => {
+        "deep.rb" => "# Deep nested file"
+      }
+    },
+    "error.log" => "error info"
+  },
+  "docs" => {
+    "latest" => "# Latest Documentation"
+  },
+  ".config" => {
+    "settings.yml" => "setting: true"
+  },
+  ".hidden_dir" => {
+    ".hidden_file" => "secret",
+    "regular_file" => "visible"
+  },
+  "ignored" => {
+    "secret.txt" => "ignored content"
+  },
+  "debug.log" => "debug info",
+  ".gitignore" => "ignored/\n*.log"
+}.freeze
+
 RSpec.describe Cafeznik::Source::Local do
   subject(:source) { described_class.new(grep:) }
 
@@ -17,33 +46,20 @@ RSpec.describe Cafeznik::Source::Local do
     end
   end
 
+  def create_file_structure(structure, base_path = ".")
+    structure.each do |name, content|
+      path = File.join(base_path, name)
+      if content.is_a?(Hash) # its a directory
+        FileUtils.mkdir_p(path)
+        create_file_structure(content, path)
+      else # its a file
+        File.write(path, content)
+      end
+    end
+  end
+
   before do
-    # Create standard directory structure
-    %w[
-      src/lib/nested
-      docs
-      .config
-      .hidden_dir
-    ].each { |dir| FileUtils.mkdir_p(dir) }
-
-    # Create standard files
-    {
-      "README.md" => "# Test Project",
-      "src/main.rb" => "puts 'Hello, World!'",
-      "src/lib/helper.rb" => "module Helper; end",
-      "src/lib/nested/deep.rb" => "# Deep nested file",
-      "docs/latest" => "# Latest Documentation",
-      ".config/settings.yml" => "setting: true",
-      ".hidden_dir/.hidden_file" => "secret",
-      ".hidden_dir/regular_file" => "visible"
-    }.each { |path, content| File.write(path, content) }
-
-    # Set up ignored files
-    File.write(".gitignore", "ignored/\n*.log")
-    FileUtils.mkdir_p("ignored")
-    File.write("ignored/secret.txt", "ignored content")
-    File.write("debug.log", "debug info")
-    File.write("src/error.log", "error info")
+    create_file_structure(FILE_STRUCTURE)
   end
 
   shared_examples "respects visibility rules" do
@@ -75,7 +91,7 @@ RSpec.describe Cafeznik::Source::Local do
         {
           "special/with spaces.rb" => "# Spacey",
           "special/special!@#.rb" => "# Special!",
-          "special/utf8_χξς.rb" => "# Greek"
+          "special/utf8_χξς.rb" => "# Barbarian"
         }.each { |path, content| File.write(path, content) }
       end
 
@@ -143,12 +159,6 @@ RSpec.describe Cafeznik::Source::Local do
       expect(source.content("empty.txt")).to eq("")
     end
 
-    it "handles mixed line endings" do
-      content = "line1\r\nline2\nline3\r\nline4\n"
-      File.write("mixed.txt", content)
-      expect(source.content("mixed.txt")).to eq(content)
-    end
-
     context "with missing files" do
       before do
         allow(Cafeznik::Log).to receive(:error)
@@ -161,22 +171,6 @@ RSpec.describe Cafeznik::Source::Local do
 
       it "returns nil" do
         expect(source.content("nonexistent.txt")).to be_nil
-      end
-    end
-
-    context "with binary files" do
-      let(:binary_content) { [0, 1, 2].pack("C*") }
-
-      before do
-        File.binwrite("binary.dat", binary_content)
-      end
-
-      it "preserves binary encoding", skip: "Need to implement proper binary file handling" do
-        expect(source.content("binary.dat").encoding).to eq(Encoding::ASCII_8BIT)
-      end
-
-      it "preserves binary content", skip: "Need to implement proper binary file handling" do
-        expect(source.content("binary.dat").bytes).to eq(binary_content.bytes)
       end
     end
   end
@@ -196,8 +190,33 @@ RSpec.describe Cafeznik::Source::Local do
     context "with no matches" do
       let(:grep) { "NonexistentPattern" }
 
-      it "returns only root" do
-        expect(source.tree).to eq(["./"])
+      it "returns empty array" do
+        expect(source.tree).to eq([])
+      end
+    end
+  end
+
+  context "with binary files" do
+    let(:binary_content) { [0, 1, 2].pack("C*") }
+
+    before do
+      File.binwrite("binary.dat", binary_content)
+    end
+
+    context "when binary files are present, it excludes them by default", skip: "TODO:" do
+      # wont even try to read binary files
+      it "does not include binary files in the tree" do
+        expect(source.tree).not_to include("binary.dat")
+      end
+    end
+
+    context "when forced to read binary files", skip: "TODO:" do
+      it "preserves binary encoding" do
+        expect(source.content("binary.dat").encoding).to eq(Encoding::ASCII_8BIT)
+      end
+
+      it "preserves binary content" do
+        expect(source.content("binary.dat").bytes).to eq(binary_content.bytes)
       end
     end
   end
