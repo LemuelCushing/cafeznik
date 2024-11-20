@@ -1,7 +1,7 @@
 require "spec_helper"
 require "tmpdir"
 
-FILE_STRUCTURE = {
+FILE_STRUCTURE = { # TODO: move this into a fixture file and share it with github_spec
   "README.md" => "# Test Project",
   "src" => {
     "main.rb" => "puts 'Hello, World!'",
