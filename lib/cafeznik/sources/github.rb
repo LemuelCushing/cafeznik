@@ -33,7 +33,7 @@ module Cafeznik
       def access_token = @_access_token ||=
                            ENV["GITHUB_TOKEN"] ||
                            fetch_token_via_gh ||
-                           (logger.error("GitHub token not found. Please configure `gh` or set GITHUB_TOKEN in your environment.")
+                           (Log.error("GitHub token not found. Please configure `gh` or set GITHUB_TOKEN in your environment.")
                             exit 1)
 
       def full_tree
