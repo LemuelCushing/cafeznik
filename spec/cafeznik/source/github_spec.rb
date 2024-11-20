@@ -109,6 +109,19 @@ RSpec.describe Cafeznik::Source::GitHub do
     end
   end
 
+  describe "#tree with grep" do
+    before do
+      allow(mock_client).to receive(:search_code).and_return(
+        double(items: [double(path: "README.md"), double(path: "src/main.rb")])
+      )
+    end
+
+    it "returns only files matching the grep pattern" do
+      source = described_class.new(repo:, grep: "main")
+      expect(source.tree).to eq(["README.md", "src/main.rb"])
+    end
+  end
+
   describe "access token retrieval" do
     before do
       allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
