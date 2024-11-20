@@ -1,6 +1,7 @@
 # rubocop:disable RSpec/VerifiedDoubles
 # Disabling this cop because Octokit::Client depends on Sawyer::Resource, a dynamic object.
 # Its runtime-defined methods cannot be verified by RSpec, so we use non-verifying doubles.
+
 require "spec_helper"
 require "base64"
 
@@ -13,85 +14,62 @@ RSpec.describe Cafeznik::Source::GitHub do
     allow(Octokit::Client).to receive(:new).and_return(mock_client)
   end
 
-  describe "#tree" do
-    context "when the tree is fetched successfully" do
-      let(:mock_tree) do
-        [
-          double(path: "README.md", type: "blob"),
-          double(path: "src", type: "tree")
-        ]
-      end
-
-      before do
-        allow(mock_client).to receive(:repository).with(repo).and_return(double(default_branch: "main"))
-        allow(mock_client).to receive(:tree).with(repo, "main", recursive: true).and_return(double(tree: mock_tree))
-      end
-
-      it "returns a sorted list of files and directories" do
-        expect(source.tree).to eq(["./", "README.md", "src/"])
-      end
+  shared_examples "handles API errors gracefully" do |method, args, result|
+    before do
+      allow(mock_client).to receive(method).and_raise(Octokit::Error)
     end
 
-    context "when the GitHub API raises an error" do
-      before do
-        allow(mock_client).to receive(:repository).with(repo).and_raise(Octokit::NotFound)
-      end
+    it "does not raise errors" do
+      expect { source.send(*args) }.not_to raise_error
+    end
 
-      it "does not raise an error when GitHub API raises an error" do # TODO: move this to a shared example
-        expect { source.tree }.not_to raise_error
-      end
-
-      it "returns nil when GitHub API raises an error" do # TODO: move this to a shared example
-        expect(source.tree).to be_nil
-      end
+    it "returns #{result.inspect}" do
+      expect(source.send(*args)).to eq(result)
     end
   end
 
-  describe "#content" do
-    context "when file content is fetched successfully" do
-      let(:encoded_content) { Base64.encode64("Sample Content") }
-
-      before do
-        allow(mock_client).to receive(:contents).with(repo, path: "README.md").and_return(content: encoded_content)
-      end
-
-      it "decodes and returns the file content" do
-        expect(source.content("README.md")).to eq("Sample Content")
-      end
+  describe "#tree" do
+    let(:mock_tree) do
+      [
+        double(path: "README.md", type: "blob"),
+        double(path: "src", type: "tree"),
+        double(path: "src/main.rb", type: "blob")
+      ]
     end
 
-    context "when the GitHub API raises an error" do
-      before do
-        allow(mock_client).to receive(:contents).with(repo, path: "README.md").and_raise(Octokit::Forbidden)
-      end
-
-      it "does not raise an error when GitHub API raises an error" do # TODO: move this to a shared example
-        expect { source.content("README.md") }.not_to raise_error
-      end
-
-      it "returns nil when GitHub API raises an error" do # TODO: move this to a shared example
-        expect(source.content("README.md")).to be_nil
-      end
+    before do
+      allow(mock_client).to receive(:repository).with(repo).and_return(double(default_branch: "main"))
+      allow(mock_client).to receive(:tree).with(repo, "main", recursive: true).and_return(double(tree: mock_tree))
     end
+
+    it "returns a sorted list of files and directories" do
+      expect(source.tree).to eq(["./", "README.md", "src/", "src/main.rb"])
+    end
+
+    it_behaves_like "handles API errors gracefully", :tree, [:tree], nil
   end
 
   describe "#all_files" do
-    let(:tree) { ["./", "src/", "README.md"] }
+    let(:mock_tree) do
+      [
+        double(path: "README.md", type: "blob"),
+        double(path: "src", type: "tree"),
+        double(path: "src/main.rb", type: "blob")
+      ]
+    end
 
     before do
-      allow(source).to receive(:tree).and_return(tree)
+      allow(source).to receive(:tree).and_return(["./", "README.md", "src/", "src/main.rb"])
     end
 
     it "returns only non-directory files" do
-      expect(source.all_files).to eq(["README.md"])
+      expect(source.all_files).to eq(["README.md", "src/main.rb"])
     end
   end
 
   describe "#expand_dir" do
-    let(:tree) { ["./", "src/", "src/main.rb", "README.md"] }
-
     before do
-      allow(source).to receive(:tree).and_return(tree)
+      allow(source).to receive(:tree).and_return(["./", "README.md", "src/", "src/main.rb"])
     end
 
     it "returns all files in a directory" do
@@ -109,32 +87,34 @@ RSpec.describe Cafeznik::Source::GitHub do
     end
   end
 
-  describe "#tree with grep" do
+  describe "#content" do
+    let(:encoded_content) { Base64.encode64("Sample Content") }
+
     before do
-      allow(mock_client).to receive(:search_code).and_return(
-        double(items: [double(path: "README.md"), double(path: "src/main.rb")])
-      )
+      allow(mock_client).to receive(:contents).with(repo, path: "README.md")
+                                              .and_return(content: encoded_content)
     end
 
-    it "returns only files matching the grep pattern" do
-      source = described_class.new(repo:, grep: "main")
-      expect(source.tree).to eq(["README.md", "src/main.rb"])
+    it "decodes and returns the file content" do
+      expect(source.content("README.md")).to eq("Sample Content")
     end
+
+    it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"], nil
   end
 
-  describe "access token retrieval" do
-    before do
-      allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
-      allow(TTY::Command).to receive(:new).and_return(tty_command)
-    end
-
+  describe "#access_token" do
     let(:tty_command) { instance_double(TTY::Command) }
+
+    before do
+      allow(TTY::Command).to receive(:new).and_return(tty_command)
+      allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
+    end
 
     context "when a token is set in ENV" do
       let(:env_token) { "env_token" }
 
       before do
-        allow(tty_command).to receive(:run) # Stub run to enable spying
+        allow(tty_command).to receive(:run)
       end
 
       it "returns the token from ENV" do
@@ -147,7 +127,7 @@ RSpec.describe Cafeznik::Source::GitHub do
       end
     end
 
-    context "when no token is set in ENV but available via gh CLI" do
+    context "when token is available via gh CLI" do
       let(:env_token) { nil }
 
       before do
