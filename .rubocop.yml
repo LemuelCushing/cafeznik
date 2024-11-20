@@ -46,3 +46,8 @@ Style/EndlessMethod:
 
 Gemspec/DevelopmentDependencies:
   EnforcedStyle: gemspec
+
+RSpec/SpecFilePathFormat:
+  Enabled: true
+  CustomTransform:
+    GitHub: github
