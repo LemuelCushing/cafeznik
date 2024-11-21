@@ -35,7 +35,7 @@ module Cafeznik
       def verify_connection!
         @client.repository(@repo)
       rescue Octokit::Error, Faraday::Error
-        Log.error "Unable to connect to GitHub. Please check your internet connection."
+        Log.error "Unable to connect to GitHub. Please check your token and / or internet connection 🐙"
         exit 1
       end
 
