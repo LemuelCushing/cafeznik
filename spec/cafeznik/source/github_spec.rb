@@ -12,6 +12,8 @@ RSpec.describe Cafeznik::Source::GitHub do
 
   before do
     allow(Octokit::Client).to receive(:new).and_return(mock_client)
+    allow(mock_client).to receive(:repository).with(repo)
+    allow(Cafeznik::Log).to receive_messages(error: nil, warn: nil, info: nil)
   end
 
   shared_examples "handles API errors gracefully" do |method, args, result|
@@ -25,6 +27,25 @@ RSpec.describe Cafeznik::Source::GitHub do
 
     it "returns #{result.inspect}" do
       expect(source.send(*args)).to eq(result)
+    end
+  end
+
+  shared_examples "handles offline gracefully" do |_method, args, _result|
+    before do
+      allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
+    end
+
+    it "raises SystemExit when offline" do
+      expect { source.send(*args) }.to raise_error(SystemExit)
+    end
+
+    it "logs an error message when offline" do
+      begin
+        source.send(*args)
+      rescue SystemExit
+        # Allow the test to proceed
+      end
+      expect(Cafeznik::Log).to have_received(:error).with("Unable to connect to GitHub. Please check your internet connection.")
     end
   end
 
@@ -47,6 +68,7 @@ RSpec.describe Cafeznik::Source::GitHub do
     end
 
     it_behaves_like "handles API errors gracefully", :tree, [:tree], nil
+    it_behaves_like "handles offline gracefully", :tree, [:tree], nil
   end
 
   describe "#all_files" do
@@ -100,6 +122,7 @@ RSpec.describe Cafeznik::Source::GitHub do
     end
 
     it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"], nil
+    it_behaves_like "handles offline gracefully", :contents, [:content, "README.md"], nil
   end
 
   describe "#access_token" do
