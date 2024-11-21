@@ -1,6 +1,7 @@
 require_relative "base"
 require "octokit"
 require "base64"
+require "resolv"
 
 module Cafeznik
   module Source
@@ -8,6 +9,7 @@ module Cafeznik
       def initialize(repo:, grep: nil)
         super
         @client = Octokit::Client.new(access_token:, auto_paginate: true)
+        verify_connection!
       end
 
       def tree
@@ -29,6 +31,13 @@ module Cafeznik
       def dir?(path) = path.end_with?("/")
 
       private
+
+      def verify_connection!
+        @client.repository(@repo)
+      rescue Octokit::Error, Faraday::Error
+        Log.error "Unable to connect to GitHub. Please check your internet connection."
+        exit 1
+      end
 
       def access_token = @_access_token ||=
                            ENV["GITHUB_TOKEN"] ||
