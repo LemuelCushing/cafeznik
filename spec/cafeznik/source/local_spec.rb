@@ -211,6 +211,10 @@ RSpec.describe Cafeznik::Source::Local do
     end
 
     context "when forced to read binary files", skip: "TODO:" do
+      it "includes binary files in the tree" do
+        expect(source.tree).to include("binary.dat")
+      end
+
       it "preserves binary encoding" do
         expect(source.content("binary.dat").encoding).to eq(Encoding::ASCII_8BIT)
       end
