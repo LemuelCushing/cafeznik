@@ -31,6 +31,9 @@ module Cafeznik
       @file_paths.filter_map do |file|
         content = @source.content(file)
         @include_headers ? with_header(content, file) : content
+      rescue StandardError => e
+        Log.error("Error fetching content for #{file}: #{e.message}")
+        nil
       end.join("\n\n")
     end
 
