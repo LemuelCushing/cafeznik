@@ -8,10 +8,11 @@ module Cafeznik
       end
 
       def tree = raise NotImplementedError
-      def all_files = raise NotImplementedError
       def expand_dir(_) = raise NotImplementedError
       def content(_) = raise NotImplementedError
       def dir?(_) = raise NotImplementedError
+
+      def all_files = tree.reject(&method(:dir?))
     end
   end
 end

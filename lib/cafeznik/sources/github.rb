@@ -10,6 +10,7 @@ module Cafeznik
         super
         @client = Octokit::Client.new(access_token:, auto_paginate: true)
         verify_connection!
+        normalize_repo_name
       end
 
       def tree
@@ -26,7 +27,6 @@ module Cafeznik
         nil
       end
 
-      def all_files = tree.reject { |path| path.end_with?("/") }
       def expand_dir(path) = tree.select { _1.start_with?(path) && !_1.end_with?("/") }
       def dir?(path) = path.end_with?("/")
 
@@ -37,6 +37,10 @@ module Cafeznik
       rescue Octokit::Error, Faraday::Error
         Log.error "Unable to connect to GitHub. Please check your token and / or internet connection 🐙"
         exit 1
+      end
+
+      def normalize_repo_name
+        @repo = @repo[%r{github\.com[:/](.+?)(/?$)}, 1] || @repo.delete_prefix("/").delete_suffix("/")
       end
 
       def access_token = @_access_token ||=

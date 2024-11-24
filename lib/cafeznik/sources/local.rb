@@ -18,8 +18,6 @@ module Cafeznik
         @_tree = files.empty? ? [] : ["./"] + files.sort
       end
 
-      def all_files = tree.reject { |path| dir?(path) }
-
       def expand_dir(path)
         Log.debug "Expanding directory: #{path}"
         result = @cmd.run("fd", ".", path.chomp("/"),

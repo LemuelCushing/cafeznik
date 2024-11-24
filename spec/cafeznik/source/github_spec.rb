@@ -45,7 +45,91 @@ RSpec.describe Cafeznik::Source::GitHub do
       rescue SystemExit
         # Allow the test to proceed
       end
-      expect(Cafeznik::Log).to have_received(:error).with("Unable to connect to GitHub. Please check your internet connection.")
+      expect(Cafeznik::Log).to have_received(:error).with(include("Unable to connect to GitHub"))
+    end
+  end
+
+  describe "#access_token" do
+    let(:tty_command) { instance_double(TTY::Command) }
+
+    before do
+      allow(TTY::Command).to receive(:new).and_return(tty_command)
+      allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
+    end
+
+    context "when a token is set in ENV" do
+      let(:env_token) { "env_token" }
+
+      before do
+        allow(tty_command).to receive(:run)
+      end
+
+      it "returns the token from ENV" do
+        expect(source.send(:access_token)).to eq("env_token")
+      end
+
+      it "does not fetch the token via gh CLI" do
+        source.send(:access_token)
+        expect(tty_command).not_to have_received(:run)
+      end
+    end
+
+    context "when token is available via gh CLI" do
+      let(:env_token) { nil }
+
+      before do
+        allow(tty_command).to receive(:run).and_return(
+          instance_double(TTY::Command::Result, out: "gh_token\n")
+        )
+      end
+
+      it "fetches the token via gh CLI" do
+        expect(source.send(:access_token)).to eq("gh_token")
+      end
+    end
+
+    context "when no token is available" do
+      let(:env_token) { nil }
+
+      before do
+        result_double = instance_double(
+          TTY::Command::Result,
+          exit_status: 1,
+          out: nil,
+          err: "Error message"
+        )
+        allow(tty_command).to receive(:run).and_raise(
+          TTY::Command::ExitError.new("gh auth token failed", result_double)
+        )
+      end
+
+      it "logs an error and exits" do
+        expect { source.send(:access_token) }.to raise_error(SystemExit)
+      end
+    end
+  end
+
+  describe "#normalize_repo_name" do
+    let(:repo_inputs) do
+      proc do |repo|
+        [
+          "https://github.com/#{repo}",
+          "github.com/#{repo}",
+          "/#{repo}",
+          "#{repo}/",
+          repo
+        ]
+      end
+    end
+
+    let(:repo) { "owner/repo" }
+
+    it "normalizes all inputs to the standard format" do
+      repo_inputs.call(repo).each do |input|
+        source.instance_variable_set(:@repo, input)
+        source.send(:normalize_repo_name)
+        expect(source.instance_variable_get(:@repo)).to eq(repo)
+      end
     end
   end
 
@@ -123,66 +207,6 @@ RSpec.describe Cafeznik::Source::GitHub do
 
     it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"], nil
     it_behaves_like "handles offline gracefully", :contents, [:content, "README.md"], nil
-  end
-
-  describe "#access_token" do
-    let(:tty_command) { instance_double(TTY::Command) }
-
-    before do
-      allow(TTY::Command).to receive(:new).and_return(tty_command)
-      allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
-    end
-
-    context "when a token is set in ENV" do
-      let(:env_token) { "env_token" }
-
-      before do
-        allow(tty_command).to receive(:run)
-      end
-
-      it "returns the token from ENV" do
-        expect(source.send(:access_token)).to eq("env_token")
-      end
-
-      it "does not fetch the token via gh CLI" do
-        source.send(:access_token)
-        expect(tty_command).not_to have_received(:run)
-      end
-    end
-
-    context "when token is available via gh CLI" do
-      let(:env_token) { nil }
-
-      before do
-        allow(tty_command).to receive(:run).and_return(
-          instance_double(TTY::Command::Result, out: "gh_token\n")
-        )
-      end
-
-      it "fetches the token via gh CLI" do
-        expect(source.send(:access_token)).to eq("gh_token")
-      end
-    end
-
-    context "when no token is available" do
-      let(:env_token) { nil }
-
-      before do
-        result_double = instance_double(
-          TTY::Command::Result,
-          exit_status: 1,
-          out: nil,
-          err: "Error message"
-        )
-        allow(tty_command).to receive(:run).and_raise(
-          TTY::Command::ExitError.new("gh auth token failed", result_double)
-        )
-      end
-
-      it "logs an error and exits" do
-        expect { source.send(:access_token) }.to raise_error(SystemExit)
-      end
-    end
   end
 end
 
