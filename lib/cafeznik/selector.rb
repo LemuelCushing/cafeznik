@@ -20,7 +20,7 @@ module Cafeznik
     def run_fzf
       cmd = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
       Log.debug "Running fzf"
-      selected = cmd.run("echo \"#{@source.tree.join("\n")}\" | fzf --multi").out.split("\n")
+      selected = cmd.run("fzf --multi", stdin: @source.tree.join("\n")).out.split("\n")
       selected.include?("./") ? [:all_files] : selected
     rescue TTY::Command::ExitError
       Log.info "No files selected, exiting."
