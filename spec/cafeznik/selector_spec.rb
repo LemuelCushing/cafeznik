@@ -81,9 +81,12 @@ RSpec.describe Cafeznik::Selector do
         allow(Cafeznik::Log).to receive(:info)
       end
 
-      it "logs the error and exits gracefully" do
-        expect { selector.select }.to raise_error(SystemExit)
+      it "logs the error" do
         expect(Cafeznik::Log).to have_received(:info).with(/No files selected, exiting/)
+      end
+
+      it "exits gracefully" do
+        expect { selector.select }.to raise_error(SystemExit)
       end
     end
   end
