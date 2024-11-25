@@ -64,7 +64,7 @@ RSpec.describe Cafeznik::Selector do
       end
 
       it "prompts for confirmation and exits if declined" do
-        expect { selector.select }.to raise_error(SystemExit)
+        expect { selector.select }.to raise_error(SystemExit) # TODO: this actually needs to exit gracefully, most likely with a message
       end
     end
 
