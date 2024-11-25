@@ -16,7 +16,12 @@ module Cafeznik
 
     def copy_to_clipboard
       Log.debug "Copying content to clipboard"
-      content = build_content.tap(&method(:confirm_size!))
+      content = build_content
+
+      unless confirm_size!(content)
+        Log.info "Copy operation cancelled by user"
+        return
+      end
 
       ::Clipboard.copy(content)
       Log.info "Copied #{content.lines.size} lines across #{@file_paths.size} files to clipboard"
@@ -42,10 +47,10 @@ module Cafeznik
 
     def confirm_size!(content)
       line_count = content.lines.size
-      return if line_count <= MAX_LINES
+      return true if line_count <= MAX_LINES
 
       Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Continue? (y/N)"
-      exit 0 unless $stdin.gets.strip.casecmp("y").zero?
+      $stdin.gets.strip.casecmp("y").zero?
     end
   end
 end
