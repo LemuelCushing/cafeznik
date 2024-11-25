@@ -25,89 +25,49 @@ RSpec.describe Cafeznik::Content do
   end
 
   describe "#copy_to_clipboard" do
-    context "with default options" do
+    context "when headers are included" do
       it "copies content with headers to the clipboard" do
         content.copy_to_clipboard
 
-        expected_output = <<~CONTENT.chomp
-          ==> file1.txt <==
-          Content of file1
-
-          ==> file2.txt <==
-          Content of file2
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
+        expect(Clipboard).to have_received(:copy).with(expected_output_with_headers)
       end
     end
 
-    context "without headers" do
+    context "when headers are excluded" do
       let(:include_headers) { false }
 
       it "copies content without headers" do
         content.copy_to_clipboard
 
-        expected_output = <<~CONTENT.chomp
-          Content of file1
-
-          Content of file2
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
+        expect(Clipboard).to have_received(:copy).with(expected_output_without_headers)
       end
     end
 
-    context "including tree" do
+    context "when including the tree" do
       let(:include_tree) { true }
 
       it "includes the file tree in the content" do
         content.copy_to_clipboard
 
-        expected_output = <<~CONTENT.chomp
-          ==> Tree <==
-          file1.txt
-          file2.txt
-
-          ==> file1.txt <==
-          Content of file1
-
-          ==> file2.txt <==
-          Content of file2
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
+        expect(Clipboard).to have_received(:copy).with(expected_output_with_tree)
       end
     end
 
-    context "when a file returns nil content" do
+    context "when a file has nil content" do
       before do
         allow(source).to receive(:content).with("file2.txt").and_return(nil)
       end
 
-      it "inclues files with nil content in the output" do
+      it "includes files with nil content in the output" do
         content.copy_to_clipboard
 
-        expected_output = <<~CONTENT.chomp
-          ==> file1.txt <==
-          Content of file1
-
-          ==> file2.txt <==
-
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
+        expect(Clipboard).to have_received(:copy).with(expected_output_with_nil_content)
       end
 
-      # unless specifically set to skip them
-      it "excludes files with nil content from the tree if skip_nil_content is set", skip: "TODO: implement" do
+      it "excludes files with nil content when skip_nil_content is set", skip: "TODO: implement" do
         content.copy_to_clipboard(skip_nil_content: true)
 
-        expected_output = <<~CONTENT.chomp
-          ==> file1.txt <==
-          Content of file1
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
+        expect(Clipboard).to have_received(:copy).with(expected_output_without_nil_or_errored_content)
       end
     end
 
@@ -121,26 +81,21 @@ RSpec.describe Cafeznik::Content do
       end
     end
 
-    context "when content exceeds maximum allowed lines" do
-      before do
-        stub_const("#{described_class}::MAX_LINES", 5)
-        allow($stdin).to receive(:gets).and_return("y\n")
-      end
+    context "when content exceeds the maximum allowed lines" do
+      before { stub_const("#{described_class}::MAX_LINES", 5) }
 
-      it "prompts the user for confirmation and proceeds when accepted" do
+      it "proceeds when the user confirms" do
+        allow($stdin).to receive(:gets).and_return("y\n")
+
         content.copy_to_clipboard
 
         expect(Clipboard).to have_received(:copy)
       end
 
-      context "and the user declines" do
-        before do
-          allow($stdin).to receive(:gets).and_return("n\n")
-        end
+      it "exits without copying when the user declines" do
+        allow($stdin).to receive(:gets).and_return("n\n")
 
-        it "exits without copying to the clipboard" do
-          expect(Clipboard).not_to have_received(:copy)
-        end
+        expect(Clipboard).not_to have_received(:copy)
       end
     end
 
@@ -151,17 +106,56 @@ RSpec.describe Cafeznik::Content do
         allow(Cafeznik::Log).to receive(:error)
       end
 
-      it "logs the error and excludes the problematic file" do
+      it "logs the error" do
         content.copy_to_clipboard
 
-        expected_output = <<~CONTENT.chomp
-          ==> file1.txt <==
-          Content of file1
-        CONTENT
-
-        expect(Clipboard).to have_received(:copy).with(expected_output)
         expect(Cafeznik::Log).to have_received(:error).with("Error fetching content for file2.txt: Unexpected error")
+      end
+
+      it "excludes the problematic file" do
+        content.copy_to_clipboard
+
+        expect(Clipboard).to have_received(:copy).with(expected_output_without_nil_or_errored_content)
       end
     end
   end
+
+  def expected_output_with_headers = <<~CONTENT.chomp
+    ==> file1.txt <==
+    Content of file1
+
+    ==> file2.txt <==
+    Content of file2
+  CONTENT
+
+  def expected_output_without_headers = <<~CONTENT.chomp
+    Content of file1
+
+    Content of file2
+  CONTENT
+
+  def expected_output_with_tree = <<~CONTENT.chomp
+    ==> Tree <==
+    file1.txt
+    file2.txt
+
+    ==> file1.txt <==
+    Content of file1
+
+    ==> file2.txt <==
+    Content of file2
+  CONTENT
+
+  def expected_output_with_nil_content = <<~CONTENT.chomp
+    ==> file1.txt <==
+    Content of file1
+
+    ==> file2.txt <==
+
+  CONTENT
+
+  def expected_output_without_nil_or_errored_content = <<~CONTENT.chomp
+    ==> file1.txt <==
+    Content of file1
+  CONTENT
 end
