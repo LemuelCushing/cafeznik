@@ -16,6 +16,9 @@ RSpec.describe Cafeznik::CLI do
     allow(mock_content).to receive(:copy_to_clipboard)
 
     allow(Cafeznik::Log).to receive(:logger).and_return(logger)
+
+    stub_request(:get, %r{https://api\.github\.com/repos/.*})
+      .to_return(status: 200, body: "{}", headers: { "Content-Type" => "application/json" })
   end
 
   describe "default command" do
