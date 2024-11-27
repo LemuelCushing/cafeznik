@@ -8,27 +8,44 @@ module Cafeznik
       @source = source
     end
 
-    def select = (@source.tree.empty? ? skip_selection : run_fzf)
-      .tap(&method(:log_selection))
-      .then { |paths| expand_paths(paths) }
-      .tap { |expanded| confirm_count!(expanded) }
+    def select
+      skip_selection if @source.tree.empty?
+      select_paths_with_fzf.tap(&method(:log_selection))
+                           .then { |paths| expand_paths(paths) }
+                           .tap { |expanded| confirm_count!(expanded) }
+    end
 
     private
 
-    def skip_selection = Log.info("No matching files found; skipping file selection.") && []
+    def skip_selection = Log.info("No matching files found; skipping file selection.") && exit(1)
 
-    def run_fzf
-      cmd = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
+    def select_paths_with_fzf
       Log.debug "Running fzf"
-      selected = cmd.run("fzf --multi", stdin: @source.tree.join("\n")).out.split("\n")
-      selected.include?("./") ? [:all_files] : selected
-    rescue TTY::Command::ExitError
-      Log.info "No files selected, exiting."
-      exit 0
+      run_fzf_command.then { |selected| selected.include?("./") ? [:all_files] : selected }
+    rescue Errno::ENOENT
+      Log.error("fzf is not installed. Please install it and try again.")
+      exit(1)
+    rescue TTY::Command::ExitError => e
+      handle_fzf_error(e)
+    end
+
+    def run_fzf_command = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
+                                      .run("fzf --multi", stdin: @source.tree.join("\n"))
+                                      .out.split("\n")
+
+    def handle_fzf_error(error)
+      exit_code = error.message.match(/exit status: (\d+)/)[1].to_i
+      if exit_code == 130
+        Log.info("No files selected. Exiting..")
+        exit(0)
+      else
+        Log.error("Error running fzf: #{error.message}")
+        exit(1)
+      end
     end
 
     def log_selection(paths)
-      Log.debug("#{paths.size} paths selected:") do
+      Log.debug("#{paths.size} paths selected") do
         paths.map.with_index(1) { |p, i| "#{i}. #{p}" }.join("\n")
       end
     end
