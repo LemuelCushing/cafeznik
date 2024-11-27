@@ -6,8 +6,8 @@ RSpec.describe Cafeznik::Selector do
   let(:source) { instance_double(Cafeznik::Source::Local) }
   let(:command) { instance_double(TTY::Command) }
   let(:result) { instance_double(TTY::Command::Result, out: selection_output.join("\n")) }
-  let(:selection_output) { [] }
   let(:source_tree) { ["./", "file1.txt", "dir/", "dir/file1.txt", "dir/file2.txt"] }
+  let(:selection_output) { [] }
 
   before do
     allow(TTY::Command).to receive(:new).and_return(command)
@@ -19,76 +19,65 @@ RSpec.describe Cafeznik::Selector do
     )
   end
 
-  shared_context "with normal fzf execution" do
-    before do
-      allow(command).to receive(:run)
-        .with("fzf --multi", any_args)
-        .and_return(result)
-    end
-  end
-
   describe "#select" do
+    before { allow(command).to receive(:run).with("fzf --multi", any_args).and_return(result) }
+
     context "when files are explicitly selected" do
-      include_context "with normal fzf execution"
       let(:selection_output) { ["file1.txt"] }
 
-      it "returns the expected file list" do
+      it "returns the selected files" do
         expect(selector.select).to eq(["file1.txt"])
       end
     end
 
     context "when the root directory is selected" do
-      include_context "with normal fzf execution"
       let(:selection_output) { ["./"] }
 
-      it "returns all files" do
+      it "returns all files in the source tree" do
         expect(selector.select).to eq(["file1.txt", "dir/file1.txt", "dir/file2.txt"])
       end
     end
 
     context "when a directory is selected" do
-      include_context "with normal fzf execution"
       let(:selection_output) { ["dir/"] }
 
       before { allow(source).to receive(:dir?).with("dir/").and_return(true) }
 
-      it "expands the directory into its files" do
+      it "expands the directory and returns its files" do
         expect(selector.select).to eq(["dir/file1.txt", "dir/file2.txt"])
       end
     end
 
     context "when no files are selected" do
-      include_context "with normal fzf execution"
-
       it "returns an empty array" do
         expect(selector.select).to eq([])
       end
     end
 
-    context "when the selected files exceed the maximum limit" do
-      include_context "with normal fzf execution"
+    context "when selected files exceed the limit" do
       let(:selection_output) { Array.new(25) { |i| "file#{i}.txt" } }
 
       before { allow($stdin).to receive(:gets).and_return("n\n") }
 
-      it "exits when declined" do
+      it "raises a SystemExit error" do
         expect { selector.select }.to raise_error(SystemExit)
       end
     end
+  end
 
+  describe "fzf errors" do
     context "when fzf is not installed" do
       before do
         allow(Cafeznik::Log).to receive(:error)
         allow(command).to receive(:run)
-          .with("fzf --multi", any_args)
-          .and_raise(Errno::ENOENT.new("No such file or directory - fzf"))
+          .and_raise(Errno::ENOENT, "No such file or directory - fzf")
       end
 
-      it "exits with installation error" do
+      it "raises a SystemExit error" do
         expect { selector.select }.to raise_error(SystemExit)
       end
 
-      it "logs installation error message" do
+      it "logs a missing installation error" do
         selector.select
       rescue SystemExit
         expect(Cafeznik::Log).to have_received(:error)
@@ -96,51 +85,43 @@ RSpec.describe Cafeznik::Selector do
       end
     end
 
-    context "when an error occurs while running fzf" do
+    context "when fzf execution error occurs" do
       before do
-        error_result = instance_double(TTY::Command::Result,
-                                       out: "",
-                                       err: "unknown option: --fake-flag",
-                                       exit_status: 2)
-        error = TTY::Command::ExitError.new(
-          "Running `fzf --multi --fake-flag` failed with\n  " \
-          "exit status: 2\n  stdout: Nothing written\n  stderr: unknown option: --fake-flag",
-          error_result
-        )
         allow(Cafeznik::Log).to receive(:error)
+        error = TTY::Command::ExitError.new(
+          "Error running fzf",
+          instance_double(TTY::Command::Result, exit_status: 2, err: "unknown option: --fake-flag", out: "")
+        )
         allow(command).to receive(:run).and_raise(error)
       end
 
-      it "exits with error status" do
-        expect { selector.send(:select_paths_with_fzf) }.to raise_error(SystemExit)
+      it "raises a SystemExit error" do
+        expect { selector.select }.to raise_error(SystemExit)
       end
 
-      it "logs error message" do
-        selector.send(:select_paths_with_fzf)
+      it "logs the fzf error message" do
+        selector.select
       rescue SystemExit
         expect(Cafeznik::Log).to have_received(:error)
           .with(a_string_including("exit status: 2"))
       end
     end
 
-    context "when the user exits fzf with esc" do
+    context "when user cancels fzf" do
       before do
-        error_result = instance_double(TTY::Command::Result,
-                                       out: "", err: "", exit_status: 130)
-        error = TTY::Command::ExitError.new(
-          "Running `fzf --multi` failed with\n  " \
-          "exit status: 130\n  stdout: Nothing written\n  stderr: Nothing written",
-          error_result
-        )
         allow(Cafeznik::Log).to receive(:info)
+        error = TTY::Command::ExitError.new(
+          "User exited fzf",
+          instance_double(TTY::Command::Result, exit_status: 130, err: "", out: "")
+        )
         allow(command).to receive(:run).and_raise(error)
       end
 
-      it "exits gracefully" do
+      it "raises a SystemExit error" do
         expect { selector.select }.to raise_error(SystemExit)
       end
 
-      it "logs cancellation message" do
+      it "logs the cancellation message" do
         selector.select
       rescue SystemExit
         expect(Cafeznik::Log).to have_received(:info)
