@@ -224,4 +224,11 @@ RSpec.describe Cafeznik::Source::Local do
       end
     end
   end
+
+  it "handles symlink loops" do
+    FileUtils.mkdir_p("loop_dir")
+    FileUtils.ln_s("../loop_dir", "loop_dir/loop")
+
+    expect { source.expand_dir("loop_dir") }.not_to raise_error
+  end
 end

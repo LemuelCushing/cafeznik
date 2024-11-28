@@ -32,6 +32,11 @@ RSpec.describe Cafeznik::CLI do
   context "when run with --repo option" do
     let(:args) { ["default", "--repo", "owner/repo"] }
 
+    it "runs in GitHub mode" do
+      described_class.start(args)
+      expect(logger_output.string).to include("Running in GitHub mode")
+    end
+
     it "initializes GitHub source for the specified repository" do
       described_class.start(args)
       expect(Cafeznik::Content).to have_received(:new).with(hash_including(source: instance_of(Cafeznik::Source::GitHub)))
@@ -57,9 +62,23 @@ RSpec.describe Cafeznik::CLI do
   end
 
   describe "logging behavior" do
-    it "logs start and completion messages" do
+    it "logs start and completion messages" do # TODO: test incomplete
       described_class.start(args)
       expect(logger_output.string).to include("Running in local mode")
+    end
+  end
+
+  describe "error handling" do
+    it "handles invalid repository format" do
+      expect do
+        described_class.start(["default", "--repo", "invalid-format"])
+      end.to raise_error(Octokit::InvalidRepository, /invalid as a repository/)
+    end
+
+    it "handles invalid command line arguments" do
+      expect do
+        described_class.start(["default", "--invalid-flag"])
+      end.to raise_error(SystemExit)
     end
   end
 end
