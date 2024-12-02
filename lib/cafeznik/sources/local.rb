@@ -6,6 +6,8 @@ module Cafeznik
     class Local < Base
       def initialize(grep: nil)
         super
+        raise "fd not installed. We depend on it. Get it!" unless fd_available?
+
         @cmd = TTY::Command.new(printer: :null)
       end
 
@@ -53,6 +55,8 @@ module Cafeznik
       end
 
       def grep_filtered_files
+        raise "we're gonna need ripgrep (rg) to be installed if we're to grep around here. Go get it and come back" unless rg_available?
+
         result = @cmd.run("rg", "--files-with-matches", @grep, ".").out.split("\n")
         Log.debug "Found #{result.size} files matching '#{@grep}'"
         result
@@ -66,7 +70,7 @@ module Cafeznik
       end
 
       def fd_available? = system("command -v fd > /dev/null 2>&1")
-      # TODO: add rg check
+      def rg_available? = system("command -v rg > /dev/null 2>&1")
     end
   end
 end
