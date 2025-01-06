@@ -6,7 +6,7 @@ module Cafeznik
     class Local < Base
       def initialize(grep: nil)
         super
-        raise "fd not installed. We depend on it. Get it!" unless fd_available?
+        Log.fatal "fd not installed. We depend on it. Get it!" unless ToolChecker.fd_available?
 
         @cmd = TTY::Command.new(printer: :null)
       end
@@ -55,22 +55,23 @@ module Cafeznik
       end
 
       def grep_filtered_files
-        raise "we're gonna need ripgrep (rg) to be installed if we're to grep around here. Go get it and come back" unless rg_available?
+        Log.fatal "we're gonna need ripgrep (rg) to be installed if we're to grep around here. Go get it and come back" unless ToolChecker.rg_available?
 
         result = @cmd.run("rg", "--files-with-matches", @grep, ".").out.split("\n")
         Log.debug "Found #{result.size} files matching '#{@grep}'"
         result
       rescue TTY::Command::ExitError => e
+        handle_rg_error(e)
+      end
+
+      def handle_rg_error(error)
         if e.message.include?("exit status: 1") # TODO: this is so ugly. Is there really no way to catch the output? Probably with `run!` instead
           Log.info "No files found matching pattern '#{@grep}'"
         else
-          Log.warn "Error running rg: #{e.message}"
+          Log.warn "Error running rg: #{error.message}"
         end
         []
       end
-
-      def fd_available? = system("command -v fd > /dev/null 2>&1")
-      def rg_available? = system("command -v rg > /dev/null 2>&1")
     end
   end
 end

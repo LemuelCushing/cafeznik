@@ -6,6 +6,7 @@ module Cafeznik
 
     def initialize(source)
       @source = source
+      Log.fatal "fzf is kinda the centerpiece of this little tool here. Go install, deal. I'll be here when you're done" unless ToolChecker.fzf_available?
     end
 
     def select
@@ -22,9 +23,6 @@ module Cafeznik
     def select_paths_with_fzf
       Log.debug "Running fzf"
       run_fzf_command.then { |selected| selected.include?("./") ? [:all_files] : selected }
-    rescue Errno::ENOENT
-      Log.error("fzf is not installed. Please install it and try again.")
-      exit(1)
     rescue TTY::Command::ExitError => e
       handle_fzf_error(e)
     end
