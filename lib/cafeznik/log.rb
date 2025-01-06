@@ -21,12 +21,15 @@ module Cafeznik
       end
     end
 
-    %i[info debug warn error].each do |level|
+    %i[info debug warn error fatal].each do |level|
       define_method(level) do |msg = nil, &block|
         return unless logger.send(:"#{level}?")
 
         message = block ? "#{msg}:\n#{block.call.gsub(/^/, '  ')}" : msg
         logger.send(level, message)
+        return unless level == :fatal
+
+        exit(1)
       end
     end
   end
