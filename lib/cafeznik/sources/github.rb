@@ -35,17 +35,12 @@ module Cafeznik
       def verify_connection!
         @client.repository(@repo)
       rescue Octokit::Error, Faraday::Error => e
-        error_message = case e
-                        when Faraday::ConnectionFailed
-                          "You might be offline, or something is keeping you from connecting 🛜"
-                        when Octokit::Unauthorized
-                          "Unable to connect to GitHub. Please check your token / gh cli 🐙"
-                        when Octokit::NotFound
-                          "Repo not found. Can't help you 🪬"
-                        end
-        Log.error error_message
-
-        exit 1
+        error_messages = {
+          Faraday::ConnectionFailed => "You might be offline, or something is keeping you from connecting 🛜",
+          Octokit::Unauthorized => "Unable to connect to GitHub. Please check your token / gh cli 🐙",
+          Octokit::NotFound => "Repo not found. Can't help you 🪬"
+        }
+        Log.fatal error_messages[e.class] || e.message
       end
 
       def normalize_repo_name
