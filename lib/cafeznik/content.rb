@@ -16,22 +16,22 @@ module Cafeznik
 
     def copy_to_clipboard
       Log.debug "Copying content to clipboard"
-      content = build_content
+      @content = build_content
 
-      unless confirm_size!(content)
+      unless confirm_size!
         Log.info "Copy operation cancelled by user"
         return
       end
 
-      ::Clipboard.copy(content)
-      Log.info "Copied #{content.lines.size} lines across #{@file_paths.size} files to clipboard"
+      ::Clipboard.copy(@content)
+      Log.info "Copied #{@content.lines.size} lines across #{@file_paths.size} files to clipboard"
     end
 
     private
 
-    def build_content = [tree_section, file_contents].compact.join("\n\n")
+    def build_content = [tree_section, files_contents].compact.join("\n\n")
 
-    def file_contents
+    def files_contents
       Log.debug "Processing #{@file_paths.size} files"
       @file_paths.filter_map do |file|
         content = @source.content(file)
@@ -45,20 +45,21 @@ module Cafeznik
     def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
 
-    def confirm_size!(content)
-      line_count = content.lines.size
+    def confirm_size!
+      line_count = @content.lines.size
       return true if line_count <= MAX_LINES
 
-      if @include_tree && suggest_tree_removal?(line_count)
+      if @include_tree && suggest_tree_removal?
         Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Try cutting out the tree? (y/N)"
         @include_tree = false
-        return confirm_size!(build_content) if CLI.user_agrees?
+        @content = build_content
+        return confirm_size! if CLI.user_agrees?
       end
 
       Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Proceed? (y/N)"
       CLI.user_agrees?
     end
 
-    def suggest_tree_removal?(line_count) = line_count <= MAX_LINES + @source.tree.size - 1
+    def suggest_tree_removal? = @content.lines.size <= MAX_LINES + @source.tree.size - 1
   end
 end
