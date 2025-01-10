@@ -49,8 +49,16 @@ module Cafeznik
       line_count = content.lines.size
       return true if line_count <= MAX_LINES
 
-      Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Continue? (y/N)"
-      $stdin.gets.strip.casecmp("y").zero?
+      if @include_tree && suggest_tree_removal?(line_count)
+        Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Try cutting out the tree? (y/N)"
+        @include_tree = false
+        return confirm_size!(build_content) if CLI.user_agrees?
+      end
+
+      Log.warn "Content exceeds #{MAX_LINES} lines (#{line_count}). Proceed? (y/N)"
+      CLI.user_agrees?
     end
+
+    def suggest_tree_removal?(line_count) = line_count <= MAX_LINES + @source.tree.size - 1
   end
 end

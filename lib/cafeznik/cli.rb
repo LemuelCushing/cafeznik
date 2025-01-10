@@ -3,6 +3,7 @@ require "thor"
 module Cafeznik
   class CLI < Thor
     def self.exit_on_failure? = true
+    def self.user_agrees? = $stdin.gets.strip.casecmp("y").zero?
 
     class_option :verbose, type: :boolean, aliases: "-v", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers"

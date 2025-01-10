@@ -1,7 +1,7 @@
 require_relative "base"
 require "octokit"
 require "base64"
-require "resolv"
+require "resolv" # TODO: why is this here?
 
 module Cafeznik
   module Source

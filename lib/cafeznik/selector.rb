@@ -59,7 +59,7 @@ module Cafeznik
       return paths if paths.size <= MAX_FILES
 
       Log.warn "Selected more than #{MAX_FILES} files. Continue? (y/N)"
-      unless $stdin.gets.strip.casecmp("y").zero?
+      unless CLI.user_agrees?
         Log.info "Copy operation cancelled by user"
         exit 0
       end
