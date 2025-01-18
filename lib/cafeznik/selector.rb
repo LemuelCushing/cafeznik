@@ -49,9 +49,11 @@ module Cafeznik
     end
 
     def expand_paths(paths)
-      return @source.all_files if paths == [:all_files]
+      return @source.all_files.reject { |path| @source.exclude?(path) } if paths == [:all_files]
 
-      paths.flat_map { |path| dir?(path) ? @source.expand_dir(path) : path }.uniq
+      paths.flat_map do |path|
+        dir?(path) ? @source.expand_dir(path) : path
+      end.uniq
     end
 
     def confirm_count!(paths)

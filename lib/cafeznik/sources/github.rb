@@ -6,7 +6,7 @@ require "resolv" # TODO: why is this here?
 module Cafeznik
   module Source
     class GitHub < Base
-      def initialize(repo:, grep: nil)
+      def initialize(repo:, grep: nil, exclude: [])
         super
         @client = Octokit::Client.new(access_token:, auto_paginate: true)
         verify_connection!
@@ -14,7 +14,10 @@ module Cafeznik
       end
 
       def tree
-        @_tree ||= @grep ? grep_files(@grep) : full_tree
+        @_tree ||= begin
+          all_paths = @grep ? grep_files(@grep) : full_tree
+          all_paths.reject { |path| exclude?(path) }
+        end
       rescue Octokit::Error => e
         Log.error "Error fetching GitHub tree: #{e.message}"
         nil
