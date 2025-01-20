@@ -16,23 +16,28 @@ RSpec.describe Cafeznik::Source::GitHub do
     allow(Cafeznik::Log).to receive_messages(error: nil, warn: nil, info: nil)
   end
 
-  shared_examples "handles API errors gracefully" do |method, args, result|
+  shared_examples "handles API errors gracefully" do |method, args|
     before do
-      allow(mock_client).to receive(method).and_raise(Octokit::Error)
+      allow(mock_client).to receive(method).and_raise(Octokit::Error, "Mocked API failure")
+      allow(Cafeznik::Log).to receive(:error)
     end
 
-    it "does not raise errors" do
-      expect { source.send(*args) }.not_to raise_error
+    it "logs the correct error message" do
+      source.send(*args)
+      expect(Cafeznik::Log).to have_received(:error).with(include("Error fetching"))
     end
 
-    it "returns #{result.inspect}" do
-      expect(source.send(*args)).to eq(result)
+    it "returns nil when an API error occurs" do
+      expect(source.send(*args)).to be_nil
     end
   end
 
   shared_examples "handles offline gracefully" do |_method, args, _result|
     before do
       allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
+      allow(Kernel).to receive(:exit)
+      allow(Cafeznik::Log).to receive(:fatal)
+      # allow(Cafeznik::Log).to receive(:error)
     end
 
     it "raises SystemExit when offline" do
@@ -45,7 +50,57 @@ RSpec.describe Cafeznik::Source::GitHub do
       rescue SystemExit
         # Allow the test to proceed
       end
-      expect(Cafeznik::Log).to have_received(:error).with(include("Unable to connect to GitHub"))
+      expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline, or something is keeping you from connecting"))
+    end
+  end
+
+  describe "#initialize" do
+    context "when offline" do
+      before do
+        allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
+        allow(Cafeznik::Log).to receive(:fatal)
+        allow(Kernel).to receive(:exit)
+      end
+
+      it "logs a fatal error" do
+        expect { described_class.new(repo:) }.to raise_error(SystemExit)
+      end
+
+      it "exits" do
+        expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline"))
+      end
+    end
+
+    context "when unauthorized" do
+      before do
+        allow(mock_client).to receive(:repository).and_raise(Octokit::Unauthorized, "Unauthorized")
+        allow(Cafeznik::Log).to receive(:fatal)
+        allow(Kernel).to receive(:exit)
+      end
+
+      it "logs a fatal error" do
+        expect { described_class.new(repo:) }.to raise_error(SystemExit)
+      end
+
+      it "exits" do
+        expect(Cafeznik::Log).to have_received(:fatal).with(include("Unable to connect to GitHub"))
+      end
+    end
+
+    context "when repo is not found" do
+      before do
+        allow(mock_client).to receive(:repository).and_raise(Octokit::NotFound, "Repo not found")
+        allow(Cafeznik::Log).to receive(:fatal)
+        allow(Kernel).to receive(:exit)
+      end
+
+      it "logs a fatal error" do
+        expect { described_class.new(repo:) }.to raise_error(SystemExit)
+      end
+
+      it "exits" do
+        expect(Cafeznik::Log).to have_received(:fatal).with(include("Repo not found"))
+      end
     end
   end
 
@@ -151,8 +206,7 @@ RSpec.describe Cafeznik::Source::GitHub do
       expect(source.tree).to eq(["./", "README.md", "src/", "src/main.rb"])
     end
 
-    it_behaves_like "handles API errors gracefully", :tree, [:tree], nil
-    it_behaves_like "handles offline gracefully", :tree, [:tree], nil
+    it_behaves_like "handles API errors gracefully", :tree, [:tree]
   end
 
   describe "#all_files" do
@@ -205,8 +259,7 @@ RSpec.describe Cafeznik::Source::GitHub do
       expect(source.content("README.md")).to eq("Sample Content")
     end
 
-    it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"], nil
-    it_behaves_like "handles offline gracefully", :contents, [:content, "README.md"], nil
+    it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"]
   end
 end
 

@@ -14,7 +14,8 @@ FILE_STRUCTURE = { # TODO: move this into a fixture file and share it with githu
     "error.log" => "error info"
   },
   "docs" => {
-    "latest" => "# Latest Documentation"
+    "latest" => "# Latest Documentation",
+    "old_docs" => "# Old Documentation"
   },
   ".config" => {
     "settings.yml" => "setting: true"
@@ -23,6 +24,9 @@ FILE_STRUCTURE = { # TODO: move this into a fixture file and share it with githu
     ".hidden_file" => "secret",
     "regular_file" => "visible"
   },
+  # "assets" => {
+  #   "image.png" => "replace with binary content"
+  # },
   "ignored" => {
     "secret.txt" => "ignored content"
   },
@@ -82,7 +86,7 @@ RSpec.describe Cafeznik::Source::Local do
     end
 
     it "includes files and directories" do
-      expect(source.tree).to include("src/main.rb", "src/lib/", "docs/latest")
+      expect(source.tree).to include("src/main.rb", "src/lib/", "docs/latest", "docs/old_docs")
     end
 
     context "with special characters" do
@@ -187,11 +191,35 @@ RSpec.describe Cafeznik::Source::Local do
       expect(source.tree).to include("./src/lib/helper.rb", "./src/with_helper.rb")
     end
 
+    context "with exclusions applied" do
+      subject(:source) { described_class.new(grep:, exclude: ["*.rb"]) }
+
+      it "respects exclusions even when files match grep" do
+        expect(source.tree).not_to include("./src/lib/helper.rb", "./src/with_helper.rb")
+      end
+    end
+
     context "with no matches" do
       let(:grep) { "NonexistentPattern" }
 
       it "returns empty array" do
         expect(source.tree).to eq([])
+      end
+    end
+  end
+
+  describe "with excluded files" do
+    [
+      { exclude: ["old_docs"], excluded_items: ["docs/old_docs"] },
+      { exclude: ["*.yml"], excluded_items: [".config/settings.yml"] },
+      { exclude: [".hidden_dir/"], excluded_items: [".hidden_dir/.hidden_file", ".hidden_dir/regular_file"] }
+    ].each do |example|
+      context "when excluding #{example[:exclude].join(', ')}" do
+        subject(:source) { described_class.new(exclude: example[:exclude]) }
+
+        it "excludes the specified items" do
+          expect(source.tree).not_to include(*example[:excluded_items])
+        end
       end
     end
   end

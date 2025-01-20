@@ -25,6 +25,9 @@ Metrics/BlockLength:
   Exclude:
     - 'spec/**/*' # no idea why rubocop-rspec/config/default.yml isnt excluding these
 
+Lint/ItWithoutArgumentsInBlock:
+  Enabled: false
+  
 Layout/LineLength:  # Changed from Metrics/LineLength
   Max: 160
 

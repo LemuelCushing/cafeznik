@@ -1,9 +1,11 @@
 require_relative "base"
 require "tty-command"
+require "memery"
 
 module Cafeznik
   module Source
     class Local < Base
+      include Memery
       def initialize(grep: nil, exclude: [])
         super
         Log.fatal "fd not installed. We depend on it. Get it!" unless ToolChecker.fd_available?
@@ -11,78 +13,55 @@ module Cafeznik
         @cmd = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
       end
 
-      def tree
-        return @_tree if defined?(@_tree)
-
-        Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}"
-        Log.debug "Excluding patterns: #{@exclude}"
-
-        files = @grep ? grep_filtered_files : full_tree
-        files.reject! { |path| dir?(path) && all_children_excluded?(path) }
-        @_tree = files.empty? ? [] : ["./"] + files.sort
-        Log.debug "Files after exclusion: #{@_tree}"
-        @_tree
+      memoize def tree
+        Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}, #{@exclude ? "excluding: #{@exclude.join(',')}" : ''}"
+        files = @grep ? grepped_files : full_tree
+        files.empty? ? [] : ["./"] + files.sort
       end
 
-      def expand_dir(path)
-        Log.debug "Expanding directory: #{path}"
-        result = @cmd.run(*fd_command_args, path.chomp("/"), "--type", "f")
-
-        result.out.split("\n").sort.uniq
-      rescue TTY::Command::ExitError => e
-        Log.error "Failed to expand directory with fd: #{e.message}"
-        []
-      end
-
+      def expand_dir(path) = run_fd(path, "--type", "f")
       def dir?(path) = File.directory?(path)
 
-      def content(path)
+      def content(path) = begin
         File.read(path)
-      rescue Errno::ENOENT
-        Log.error "File not found: #{path}"
+      rescue StandardError
+        Log.error("File not found: #{path}")
         nil
       end
 
+      memoize def exclude?(path) = @exclude.any? { File.fnmatch?(it, File.basename(path), File::FNM_PATHNAME) }
+      memoize def full_tree = fd_command(".")
+
       private
 
-      def fd_command_args =
-        [
-          "fd",
-          ".",
-          "--hidden",
-          "--follow",
-          *(@exclude + [".git"]).flat_map { |e| ["--exclude", e] }
-        ]
-
-      def full_tree
-        result = @cmd.run(*fd_command_args)
-        result.out.split("\n")
+      memoize def grepped_files
+        Log.fatal "rg required for grep functionality. Install and retry." unless ToolChecker.rg_available?
+        files = run_command(["rg", "--files-with-matches", @grep, "."]).tap { Log.debug "Grep matched #{it.size} files" }
+        files.reject { exclude?(it) }
       rescue TTY::Command::ExitError => e
-        Log.error "Failed to build file tree with fd: #{e.message}"
+        handle_grep_error(e)
+      end
+
+      def run_fd(path, *args)
+        run_command(fd_command(path, *args)).tap { Log.debug "FD fetched #{it.size} entries from #{path}" }
+      rescue TTY::Command::ExitError => e
+        Log.error("FD error: #{e.message}")
         []
       end
 
-      def grep_filtered_files
-        Log.fatal "we're gonna need ripgrep (rg) to be installed if we're to grep around here. Go get it and come back" unless ToolChecker.rg_available?
-
-        result = @cmd.run("rg", "--files-with-matches", @grep, ".").out.split("\n")
-        Log.debug "Found #{result.size} files matching '#{@grep}'"
-        result
-      rescue TTY::Command::ExitError => e
-        handle_rg_error(e)
+      def fd_command(path, *args)
+        run_command ["fd", path.chomp("/"), "--hidden", "--follow", *exclusion_args, *args]
       end
 
-      # TODO: maybe there's a more elegant way to do this
-      def all_children_excluded?(path) = expand_dir(path).all? { |child| exclude?(child) || (dir?(child) && all_children_excluded?(child)) }
+      def run_command(args) = @cmd.run(*args).out.split("\n")
 
-      def handle_rg_error(error)
-        if e.message.include?("exit status: 1") # TODO: this is so ugly. Is there really no way to catch the output? Probably with `run!` instead
-          Log.info "No files found matching pattern '#{@grep}'"
-        else
-          Log.warn "Error running rg: #{error.message}"
-        end
+      def handle_grep_error(error)
+        Log.info "No grep matches for '#{@grep}'" if error.message.include?("exit status: 1")
+        Log.warn "RG error: #{error.message}" unless error.message.include?("exit status: 1")
         []
       end
+
+      def exclusion_args = (@exclude + [".git"]).flat_map { ["--exclude", it] }
     end
   end
 end
