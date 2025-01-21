@@ -1,6 +1,7 @@
 require_relative "base"
 require "tty-command"
 require "memery"
+require "shellwords"
 
 module Cafeznik
   module Source
@@ -34,10 +35,15 @@ module Cafeznik
 
       private
 
+      require "shellwords"
+
       memoize def grepped_files
         Log.fatal "rg required for grep functionality. Install and retry." unless ToolChecker.rg_available?
-        files = run_command(["rg", "--files-with-matches", @grep, "."]).tap { Log.debug "Grep matched #{it.size} files" }
-        files.reject { exclude?(it) }
+        exclusion_args = @exclude.flat_map { |pattern| ["-g", "!#{pattern}"] } if @exclude.any?
+        command = ["rg", "--files-with-matches", @grep, ".", *exclusion_args].compact.flatten
+
+        Log.debug "Running grep: #{command.join(' ')}"
+        run_command(command).tap { |result| Log.debug "Grep matched #{result.size} files" }.map { |it| it.delete_prefix("./") }
       rescue TTY::Command::ExitError => e
         handle_grep_error(e)
       end
