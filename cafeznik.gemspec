@@ -1,7 +1,8 @@
-# cafeznik.gemspec
+require_relative "lib/cafeznik/version"
+
 Gem::Specification.new do |spec|
-  spec.name          = "cafeznik"
-  spec.version       = "0.5.0"
+  spec.name = "cafeznik"
+  spec.version = Cafeznik::VERSION
   spec.authors       = ["Lem"]
   spec.summary       = "CLI tool for copying files to your clipboard en masse"
   spec.description   = <<~DESC

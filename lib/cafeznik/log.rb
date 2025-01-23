@@ -8,11 +8,10 @@ module Cafeznik
     def verbose=(value)
       @verbose = value
       logger.level = value ? Logger::DEBUG : Logger::INFO
+      logger.formatter.verbose = value
     end
 
-    def verbose?
-      @verbose || false
-    end
+    def verbose? = @verbose || false
 
     def logger
       @_logger ||= Logger.new($stdout).tap do |log|
@@ -31,7 +30,8 @@ module Cafeznik
         method = caller_context.label.split(/[#.]/).last
 
         source_prefix = "[#{component}::#{method}]"
-        message = block ? "#{msg}:\n#{block.call.gsub(/^/, '  ')}" : msg
+
+        message = block ? "#{msg}:\n#{block.call}" : msg
         formatted_message = "#{source_prefix} #{message}"
 
         logger.send(level, formatted_message)
@@ -58,8 +58,11 @@ module Cafeznik
       reset: "\e[0m"
     }.freeze
 
+    attr_accessor :verbose
+
     def initialize
       @component_colors = {}
+      @verbose = false
       super
     end
 
@@ -69,13 +72,18 @@ module Cafeznik
       severity_prefix = "#{severity_bg}#{severity_fg}#{severity[0]}#{COLORS[:reset]}"
       source_prefix = format_source(component, method)
 
-      "#{severity_prefix} #{source_prefix} #{content}\n"
+      formatted_content = content.gsub("\n", "\n" + (" " * (severity_prefix.size + source_prefix.size + 1)))
+      if @verbose
+        "#{severity_prefix} #{source_prefix} #{formatted_content}\n"
+      else
+        "#{formatted_content}\n"
+      end
     end
 
     private
 
     def parse_message(message)
-      if message =~ /\[([^:]+)::([^\]]+)\]\s+(.+)/
+      if message =~ /\[([^:]+)::([^\]]+)\]\s+(.+)/m
         [::Regexp.last_match(1), ::Regexp.last_match(2), ::Regexp.last_match(3)]
       else
         ["Unknown", "unknown", message]

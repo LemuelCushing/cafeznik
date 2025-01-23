@@ -6,7 +6,10 @@ module Cafeznik
 
     def initialize(source:, file_paths:, include_headers:, include_tree:)
       Log.debug "Initializing Content" do
-        "Source: #{source}\n file_paths: #{file_paths}\n include_headers: #{include_headers}\n include_tree: #{include_tree}\n"
+        <<~LOG
+          Source: #{source.class} file_paths: #{file_paths.size}
+          include_headers: #{include_headers} include_tree: #{include_tree}
+        LOG
       end
       @source = source
       @file_paths = file_paths
@@ -35,7 +38,9 @@ module Cafeznik
       Log.debug "Processing #{@file_paths.size} files"
       @file_paths.filter_map do |file|
         content = @source.content(file)
-        @include_headers ? with_header(content, file) : content
+        if content
+          @include_headers ? with_header(content, file) : content
+        end
       rescue StandardError => e
         Log.error("Error fetching content for #{file}: #{e.message}")
         nil
