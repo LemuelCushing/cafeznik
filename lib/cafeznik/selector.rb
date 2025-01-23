@@ -11,9 +11,9 @@ module Cafeznik
 
     def select
       skip_selection if @source.tree.empty?
-      select_paths_with_fzf.tap(&method(:log_selection))
-                           .then { |paths| expand_paths(paths) }
-                           .tap { |expanded| confirm_count!(expanded) }
+      select_paths_with_fzf
+        .then { |paths| expand_paths(paths) }
+        .tap { |expanded| confirm_count!(expanded) }
     end
 
     private
@@ -39,12 +39,6 @@ module Cafeznik
       else
         Log.error("Error running fzf: #{error.message}")
         exit(1)
-      end
-    end
-
-    def log_selection(paths)
-      Log.debug("#{paths.size} paths selected") do
-        paths.map.with_index(1) { |p, i| "#{i}. #{p}" }.join("\n")
       end
     end
 

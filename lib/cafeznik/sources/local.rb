@@ -1,7 +1,6 @@
 require_relative "base"
 require "tty-command"
 require "memery"
-require "shellwords"
 
 module Cafeznik
   module Source
@@ -16,58 +15,58 @@ module Cafeznik
 
       memoize def tree
         Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}, #{@exclude ? "excluding: #{@exclude.join(',')}" : ''}"
-        files = @grep ? grepped_files : full_tree
+        files = @grep ? grepped_files : all_files
         files.empty? ? [] : ["./"] + files.sort
       end
 
-      def expand_dir(path) = run_fd(path, "--type", "f")
+      def expand_dir(path)
+        return all_files if path == "./"
+
+        list_paths(path, files_only: true)
+      end
+
       def dir?(path) = File.directory?(path)
 
-      def content(path) = begin
+      def content(path)
+        return nil if dir?(path) || exclude?(path)
+
         File.read(path)
       rescue StandardError
         Log.error("File not found: #{path}")
         nil
       end
 
-      memoize def exclude?(path) = @exclude.any? { File.fnmatch?(it, File.basename(path), File::FNM_PATHNAME) }
-      memoize def full_tree = fd_command(".")
+      memoize def exclude?(path)
+        @exclude.any? { |p| File.fnmatch?(p, File.basename(path), File::FNM_PATHNAME) }
+      end
+
+      def all_files = list_paths(".", full_tree: true)
 
       private
 
-      require "shellwords"
+      def list_paths(path, full_tree: false, files_only: false)
+        args = ["--hidden", "--follow",
+                *exclusion_args,
+                (["--type", "f"] if files_only),
+                ("--full-path" if full_tree),
+                ".", (path unless full_tree)].flatten.compact
+        run_cmd("fd", args)
+      rescue TTY::Command::ExitError => e
+        Log.error("FD error: #{e.message}") unless e.message.include?("exit status: 1")
+        []
+      end
+
+      def exclusion_args = (@exclude + [".git"]).flat_map { |p| ["--exclude", p] }
 
       memoize def grepped_files
         Log.fatal "rg required for grep functionality. Install and retry." unless ToolChecker.rg_available?
-        exclusion_args = @exclude.flat_map { |pattern| ["-g", "!#{pattern}"] } if @exclude.any?
-        command = ["rg", "--files-with-matches", @grep, ".", *exclusion_args].compact.flatten
 
-        Log.debug "Running grep: #{command.join(' ')}"
-        run_command(command).tap { |result| Log.debug "Grep matched #{result.size} files" }.map { |it| it.delete_prefix("./") }
-      rescue TTY::Command::ExitError => e
-        handle_grep_error(e)
+        args = @exclude.flat_map { |p| ["-g", "!#{p}"] }
+        result = run_cmd("rg", ["--files-with-matches", @grep, ".", *args])
+        result.map { |f| f.delete_prefix("./") }
       end
 
-      def run_fd(path, *args)
-        run_command(fd_command(path, *args)).tap { Log.debug "FD fetched #{it.size} entries from #{path}" }
-      rescue TTY::Command::ExitError => e
-        Log.error("FD error: #{e.message}")
-        []
-      end
-
-      def fd_command(path, *args)
-        run_command ["fd", path.chomp("/"), "--hidden", "--follow", *exclusion_args, *args]
-      end
-
-      def run_command(args) = @cmd.run(*args).out.split("\n")
-
-      def handle_grep_error(error)
-        Log.info "No grep matches for '#{@grep}'" if error.message.include?("exit status: 1")
-        Log.warn "RG error: #{error.message}" unless error.message.include?("exit status: 1")
-        []
-      end
-
-      def exclusion_args = (@exclude + [".git"]).flat_map { ["--exclude", it] }
+      def run_cmd(cmd, args) = @cmd.run(cmd, *args).out.split("\n")
     end
   end
 end
