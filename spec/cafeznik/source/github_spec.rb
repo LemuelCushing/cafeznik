@@ -5,6 +5,7 @@
 require "spec_helper"
 require "base64"
 
+# TODO: `bin/cafeznik -r ruby/irb -e "*.rb" -g "irb"` does not work as expected - it should not return rb files at all
 RSpec.describe Cafeznik::Source::GitHub do
   let(:mock_client) { instance_double(Octokit::Client) }
   let(:repo) { "owner/repo" }

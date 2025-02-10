@@ -115,7 +115,7 @@ RSpec.describe Cafeznik::Source::Local do
     let(:described_method) { :all_files }
 
     it "excludes directories" do
-      expect(source.all_files).not_to include("src/", "src/lib/")
+      expect(source.all_files).not_to include(a_string_ending_with("/"))
     end
 
     it "includes all regular files" do
@@ -183,19 +183,20 @@ RSpec.describe Cafeznik::Source::Local do
     let(:grep) { "Helper" }
 
     before do
-      File.write("src/other.rb", "class Other; end")
-      File.write("src/with_helper.rb", "include Helper")
+      File.write("src/other.rb", "class Other; end") # TODO: do I need this?
+      File.write("src/with_helper.rb", "include Helper") # TODO: move this to the structure above?
+      File.write("docs/helper.md", "Helper docs") # TODO: move this to the structure above?
     end
 
     it "only includes matching files" do
-      expect(source.tree).to include("./src/lib/helper.rb", "./src/with_helper.rb")
+      expect(source.tree).to include("src/lib/helper.rb", "src/with_helper.rb")
     end
 
     context "with exclusions applied" do
       subject(:source) { described_class.new(grep:, exclude: ["*.rb"]) }
 
       it "respects exclusions even when files match grep" do
-        expect(source.tree).not_to include("./src/lib/helper.rb", "./src/with_helper.rb")
+        expect(source.tree).not_to include("src/lib/helper.rb", "src/with_helper.rb")
       end
     end
 

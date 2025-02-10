@@ -12,6 +12,7 @@ module Cafeznik
       def expand_dir(_) = raise NotImplementedError
       def content(_) = raise NotImplementedError
       def dir?(_) = raise NotImplementedError
+      def full_tree = raise NotImplementedError
 
       def exclude?(path)
         Log.debug "Checking exclusion for #{path} against #{@exclude}"

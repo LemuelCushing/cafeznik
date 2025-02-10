@@ -12,19 +12,29 @@ module Cafeznik
     def select
       skip_selection if @source.tree.empty?
       select_paths_with_fzf
+        .tap { log_selection(it) if Log.verbose? }
         .then { |paths| expand_paths(paths) }
         .tap { |expanded| confirm_count!(expanded) }
     end
 
     private
 
-    def skip_selection = Log.info("No matching files found; skipping file selection.") && exit(1)
+    def skip_selection
+      Log.info("No matching files found; skipping file selection.")
+      exit(1)
+    end
 
     def select_paths_with_fzf
       Log.debug "Running fzf"
       run_fzf_command.then { |selected| selected.include?("./") ? [:all_files] : selected }
     rescue TTY::Command::ExitError => e
       handle_fzf_error(e)
+    end
+
+    def log_selection(paths)
+      Log.debug("#{paths.size} paths selected:") do
+        paths.map.with_index(1) { |p, i| "#{i}. #{p}" }.join("\n")
+      end
     end
 
     def run_fzf_command = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
@@ -43,6 +53,7 @@ module Cafeznik
     end
 
     def expand_paths(paths)
+      # TODO: I think I can remove the reject here, as it's already done in the source
       return @source.all_files.reject { |path| @source.exclude?(path) } if paths == [:all_files]
 
       paths.flat_map do |path|

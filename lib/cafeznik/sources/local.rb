@@ -15,12 +15,16 @@ module Cafeznik
 
       memoize def tree
         Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}, #{@exclude ? "excluding: #{@exclude.join(',')}" : ''}"
-        files = @grep ? grepped_files : all_files
+        files = @grep ? grepped_files : full_tree
         files.empty? ? [] : ["./"] + files.sort
       end
 
       def expand_dir(path)
-        return all_files if path == "./"
+        if path == "./"
+          return grepped_files if @grep
+
+          return full_tree
+        end
 
         list_paths(path, files_only: true)
       end
@@ -40,16 +44,18 @@ module Cafeznik
         @exclude.any? { |p| File.fnmatch?(p, File.basename(path), File::FNM_PATHNAME) }
       end
 
-      def all_files = list_paths(".", full_tree: true)
+      def full_tree = list_paths
+      def all_files = @grep ? grepped_files : list_paths(files_only: true)
 
       private
 
-      def list_paths(path, full_tree: false, files_only: false)
+      def list_paths(path = nil, files_only: false)
         args = ["--hidden", "--follow",
-                *exclusion_args,
                 (["--type", "f"] if files_only),
-                ("--full-path" if full_tree),
-                ".", (path unless full_tree)].flatten.compact
+                "--full-path",
+                ("--strip-cwd-prefix" unless path),
+                *exclusion_args,
+                ".", path].flatten.compact
         run_cmd("fd", args)
       rescue TTY::Command::ExitError => e
         Log.error("FD error: #{e.message}") unless e.message.include?("exit status: 1")
@@ -64,6 +70,9 @@ module Cafeznik
         args = @exclude.flat_map { |p| ["-g", "!#{p}"] }
         result = run_cmd("rg", ["--files-with-matches", @grep, ".", *args])
         result.map { |f| f.delete_prefix("./") }
+      rescue TTY::Command::ExitError => e
+        Log.error("RG error: #{e.message}") unless e.message.include?("exit status: 1")
+        []
       end
 
       def run_cmd(cmd, args) = @cmd.run(cmd, *args).out.split("\n")
