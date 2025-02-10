@@ -1,7 +1,9 @@
 require "clipboard"
+require "memery"
 
 module Cafeznik
   class Content
+    include Memery
     MAX_LINES = 10_000
 
     def initialize(source:, file_paths:, include_headers:, include_tree:)
@@ -21,33 +23,34 @@ module Cafeznik
       Log.debug "Copying content to clipboard"
       @content = build_content
 
-      unless confirm_size!
-        Log.info "Copy operation cancelled by user"
-        return
-      end
+      return Log.info("Copy operation cancelled by user") unless confirm_size!
 
       ::Clipboard.copy(@content)
-      Log.info "Copied #{@content.lines.size} lines across #{@file_paths.size} files to clipboard"
+
+      skipped_files = @file_paths.size - files_contents.size
+
+      log_message = "Copied #{@content.lines.size} lines across #{files_contents.size} files"
+      log_message << " (skipped #{skipped_files} empty)" if skipped_files.positive?
+
+      Log.info("#{log_message} to clipboard")
     end
 
     private
 
-    def build_content = [tree_section, files_contents].compact.join("\n\n")
+    memoize def build_content = [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
 
-    def files_contents
+    memoize def files_contents
       Log.debug "Processing #{@file_paths.size} files"
-      @file_paths.filter_map do |file|
+      @file_paths.each_with_object([]) do |file, memo|
         content = @source.content(file)
-        if content
-          @include_headers ? with_header(content, file) : content
-        end
+        memo << (@include_headers ? with_header(content, file) : content) unless content.empty?
       rescue StandardError => e
         Log.error("Error fetching content for #{file}: #{e.message}")
         nil
-      end.join("\n\n")
+      end
     end
 
-    def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
+    memoize def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
 
     def confirm_size!
