@@ -31,5 +31,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop-performance", "~> 1.22"
   spec.add_development_dependency "rubocop-rspec", "~> 3.2"
   spec.add_development_dependency "standard", "~> 1.41"
+  spec.add_development_dependency "super_diff"
   spec.add_development_dependency "webmock", "~> 3.24"
 end
