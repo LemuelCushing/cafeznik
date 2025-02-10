@@ -19,7 +19,9 @@ RSpec.describe Cafeznik::Source::GitHub do
 
   shared_examples "handles API errors gracefully" do |method, args|
     before do
-      allow(mock_client).to receive(method).and_raise(Octokit::Error, "Mocked API failure")
+      allow(mock_client).to receive(method).and_raise(
+        Octokit::Error.new({ message: "Mocked API failure" })
+      )
       allow(Cafeznik::Log).to receive(:error)
     end
 
@@ -35,9 +37,11 @@ RSpec.describe Cafeznik::Source::GitHub do
 
   shared_examples "handles offline gracefully" do |_method, args, _result|
     before do
-      allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
-      allow(Kernel).to receive(:exit)
-      allow(Cafeznik::Log).to receive(:fatal)
+      allow(mock_client).to receive(:repository).and_raise(
+        Faraday::ConnectionFailed.new("Failed to connect")
+      )
+      allow(Kernel).to receive(:exit).and_raise(SystemExit)
+      allow(Cafeznik::Log).to receive(:fatal).and_call_original
       # allow(Cafeznik::Log).to receive(:error)
     end
 
@@ -59,47 +63,38 @@ RSpec.describe Cafeznik::Source::GitHub do
     context "when offline" do
       before do
         allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
-        allow(Cafeznik::Log).to receive(:fatal)
-        allow(Kernel).to receive(:exit)
+        allow(Cafeznik::Log).to receive(:fatal).and_call_original
+        allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error" do
+      it "logs a fatal error and exits" do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
-      end
-
-      it "exits" do
         expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline"))
       end
     end
 
     context "when unauthorized" do
       before do
-        allow(mock_client).to receive(:repository).and_raise(Octokit::Unauthorized, "Unauthorized")
-        allow(Cafeznik::Log).to receive(:fatal)
-        allow(Kernel).to receive(:exit)
+        allow(mock_client).to receive(:repository).and_raise(Octokit::Unauthorized.new({ message: "Unauthorized" }))
+        allow(Cafeznik::Log).to receive(:fatal).and_call_original
+        allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error" do
+      it "logs a fatal error and exits" do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
-      end
-
-      it "exits" do
         expect(Cafeznik::Log).to have_received(:fatal).with(include("Unable to connect to GitHub"))
       end
     end
 
     context "when repo is not found" do
       before do
-        allow(mock_client).to receive(:repository).and_raise(Octokit::NotFound, "Repo not found")
-        allow(Cafeznik::Log).to receive(:fatal)
-        allow(Kernel).to receive(:exit)
+        allow(mock_client).to receive(:repository).and_raise(Octokit::NotFound.new({ message: "Repo not found" }))
+        allow(Cafeznik::Log).to receive(:fatal).and_call_original
+        allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error" do
+      it "logs a fatal error and exits" do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
-      end
-
-      it "exits" do
         expect(Cafeznik::Log).to have_received(:fatal).with(include("Repo not found"))
       end
     end
