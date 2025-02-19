@@ -49,13 +49,12 @@ module Cafeznik
 
       private
 
-      def list_paths(path = nil, files_only: false)
+      def list_paths(path = ".", files_only: false)
         args = ["--hidden", "--follow",
                 (["--type", "f"] if files_only),
                 "--full-path",
-                ("--strip-cwd-prefix" unless path),
                 *exclusion_args,
-                ".", path].flatten.compact
+                path].flatten.compact
         run_cmd("fd", args)
       rescue TTY::Command::ExitError => e
         Log.error("FD error: #{e.message}") unless e.message.include?("exit status: 1")
