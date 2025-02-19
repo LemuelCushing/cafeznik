@@ -20,11 +20,13 @@ module Cafeznik
       Log.verbose = options[:verbose]
       Log.info "Running in #{repo ? 'GitHub' : 'local'} mode"
 
+      source = determine_source
+
+      selector = Selector.new(source)
       file_paths = selector.select
 
       Content.new( # TODO: find better name than Content, perhaps Clipboard?
-        source:,
-        file_paths:,
+        source:, file_paths:,
         include_headers: !options[:no_header],
         include_tree: options[:with_tree]
       ).copy_to_clipboard
@@ -32,11 +34,16 @@ module Cafeznik
 
     private
 
+    def determine_source
+      if repo
+        Source::GitHub.new(repo:, grep:, exclude:)
+      else
+        Source::Local.new(grep:, exclude:)
+      end
+    end
+
     def repo = options[:repo]
     def grep = options[:grep]
-    def source = @_source ||= repo ? Source::GitHub.new(repo:, grep:, exclude: exclude_patterns) : Source::Local.new(grep:, exclude: exclude_patterns)
-    def selector = @_selector ||= Selector.new(source)
-
-    def exclude_patterns = options[:exclude] || []
+    def exclude = options[:exclude] || []
   end
 end
