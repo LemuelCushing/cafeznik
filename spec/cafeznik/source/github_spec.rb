@@ -42,7 +42,6 @@ RSpec.describe Cafeznik::Source::GitHub do
       )
       allow(Kernel).to receive(:exit).and_raise(SystemExit)
       allow(Cafeznik::Log).to receive(:fatal).and_call_original
-      # allow(Cafeznik::Log).to receive(:error)
     end
 
     it "raises SystemExit when offline" do
@@ -67,7 +66,7 @@ RSpec.describe Cafeznik::Source::GitHub do
         allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error and exits" do
+      it "logs a fatal error and exits", :aggregate_failures do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
         expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline"))
       end
@@ -80,7 +79,7 @@ RSpec.describe Cafeznik::Source::GitHub do
         allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error and exits" do
+      it "logs a fatal error and exits", :aggregate_failures do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
         expect(Cafeznik::Log).to have_received(:fatal).with(include("Unable to connect to GitHub"))
       end
@@ -93,7 +92,7 @@ RSpec.describe Cafeznik::Source::GitHub do
         allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
-      it "logs a fatal error and exits" do
+      it "logs a fatal error and exits", :aggregate_failures do
         expect { described_class.new(repo:) }.to raise_error(SystemExit)
         expect(Cafeznik::Log).to have_received(:fatal).with(include("Repo not found"))
       end
@@ -258,5 +257,4 @@ RSpec.describe Cafeznik::Source::GitHub do
     it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"]
   end
 end
-
 # rubocop:enable RSpec/VerifiedDoubles

@@ -7,6 +7,10 @@ require "super_diff/rspec"
 WebMock.disable_net_connect!(allow_localhost: true)
 
 RSpec.configure do |config|
+  config.before(:suite) do
+    # Redirect logs to a null output so they don't clutter the test output.
+    Cafeznik::Log.instance_variable_set(:@_logger, Logger.new(File::NULL))
+  end
   config.expect_with :rspec do |expectations|
     expectations.include_chain_clauses_in_custom_matcher_descriptions = true
     expectations.syntax = :expect
