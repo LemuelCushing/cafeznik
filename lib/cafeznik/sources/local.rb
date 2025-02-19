@@ -40,10 +40,6 @@ module Cafeznik
         nil
       end
 
-      memoize def exclude?(path)
-        @exclude.any? { |p| File.fnmatch?(p, File.basename(path), File::FNM_PATHNAME) }
-      end
-
       def full_tree = list_paths
       def all_files = @grep ? grepped_files : list_paths(files_only: true)
 
@@ -66,7 +62,7 @@ module Cafeznik
       memoize def grepped_files
         Log.fatal "rg required for grep functionality. Install and retry." unless ToolChecker.rg_available?
 
-        args = @exclude.flat_map { |p| ["-g", "!#{p}"] }
+        args = @exclude.flat_map { |p| ["-g", "!#{p}"] } # formats the exclusion into rg glob format
         result = run_cmd("rg", ["--files-with-matches", @grep, ".", *args])
         result.map { |f| f.delete_prefix("./") }
       rescue TTY::Command::ExitError => e
