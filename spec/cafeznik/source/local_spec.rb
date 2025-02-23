@@ -1,39 +1,6 @@
 require "spec_helper"
 require "tmpdir"
 
-FILE_STRUCTURE = { # TODO: move this into a fixture file and share it with github_spec (see: https://chatgpt.com/share/e/673e6e54-3244-8008-9973-955e9760a50b)
-  "README.md" => "# Test Project",
-  "src" => {
-    "main.rb" => "puts 'Hello, World!'",
-    "lib" => {
-      "helper.rb" => "module Helper; end",
-      "nested" => {
-        "deep.rb" => "# Deep nested file"
-      }
-    },
-    "error.log" => "error info"
-  },
-  "docs" => {
-    "latest" => "# Latest Documentation",
-    "old_docs" => "# Old Documentation"
-  },
-  ".config" => {
-    "settings.yml" => "setting: true"
-  },
-  ".hidden_dir" => {
-    ".hidden_file" => "secret",
-    "regular_file" => "visible"
-  },
-  # "assets" => {
-  #   "image.png" => "replace with binary content"
-  # },
-  "ignored" => {
-    "secret.txt" => "ignored content"
-  },
-  "debug.log" => "debug info",
-  ".gitignore" => "ignored/\n*.log"
-}.freeze
-
 RSpec.describe Cafeznik::Source::Local do
   subject(:source) { described_class.new(grep:) }
 
@@ -42,28 +9,13 @@ RSpec.describe Cafeznik::Source::Local do
   around do |example|
     Dir.mktmpdir do |dir|
       Dir.chdir(dir) do
+        create_local_file_structure
         system("git init --quiet")
         system("git config --local user.email 'test@example.com'")
         system("git config --local user.name 'Test User'")
         example.run
       end
     end
-  end
-
-  def create_file_structure(structure, base_path = ".")
-    structure.each do |name, content|
-      path = File.join(base_path, name)
-      if content.is_a?(Hash) # its a directory
-        FileUtils.mkdir_p(path)
-        create_file_structure(content, path)
-      else # its a file
-        File.write(path, content)
-      end
-    end
-  end
-
-  before do
-    create_file_structure(FILE_STRUCTURE)
   end
 
   shared_examples "respects visibility rules" do

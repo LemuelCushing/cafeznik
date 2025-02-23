@@ -1,5 +1,6 @@
 require "webmock/rspec"
 require_relative "../lib/cafeznik"
+require_relative "file_helpers"
 require "super_diff/rspec"
 
 # Dir[File.expand_path("support/**/*.rb", __dir__)].each { |f| require f } # TODO: remove this if not needed
@@ -7,6 +8,7 @@ require "super_diff/rspec"
 WebMock.disable_net_connect!(allow_localhost: true)
 
 RSpec.configure do |config|
+  config.include FileHelpers
   config.before(:suite) do
     # Redirect logs to a null output so they don't clutter the test output.
     Cafeznik::Log.instance_variable_set(:@_logger, Logger.new(File::NULL))

@@ -12,6 +12,7 @@ module Cafeznik
     class_option :exclude, type: :array, aliases: "-e", desc: "Exclude files/folders matching patterns"
 
     desc "default", "Select files, copy to clipboard; use --repo/-r for GitHub repository"
+    # TODO: why is this a method_option and not a class_option?
     method_option :repo, type: :string, aliases: "-r", desc: "GitHub repository (owner/repo format)"
 
     default_task :default

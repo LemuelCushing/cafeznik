@@ -1,3 +1,4 @@
+# spec/cafeznik/source/github_spec.rb
 # rubocop:disable RSpec/VerifiedDoubles
 # Disabling this cop because Octokit::Client depends on Sawyer::Resource, a dynamic object.
 # Its runtime-defined methods cannot be verified by RSpec, so we use non-verifying doubles.
@@ -5,16 +6,56 @@
 require "spec_helper"
 require "base64"
 
-# TODO: `bin/cafeznik -r ruby/irb -e "*.rb" -g "irb"` does not work as expected - it should not return rb files at all
+GitHubEntry = Struct.new(:path, :type)
+
 RSpec.describe Cafeznik::Source::GitHub do
   let(:mock_client) { instance_double(Octokit::Client) }
   let(:repo) { "owner/repo" }
-  let(:source) { described_class.new(repo:) }
+  let(:source) { described_class.new(repo: repo) }
+
+  # Helper: convert an array of hashes into an array of GitHubEntry structs.
+  def struct_tree(array)
+    array.map { |hash| GitHubEntry.new(hash[:path], hash[:type]) }
+  end
 
   before do
     allow(Octokit::Client).to receive(:new).and_return(mock_client)
-    allow(mock_client).to receive(:repository).with(repo)
+    allow(mock_client).to receive(:repository).with(repo).and_return(double(default_branch: "main"))
+    allow(mock_client).to receive(:tree).with(repo, "main", recursive: true)
+                                        .and_return(double(tree: struct_tree(mock_github_tree)))
     allow(Cafeznik::Log).to receive_messages(error: nil, warn: nil, info: nil)
+  end
+
+  RSpec.shared_examples "handles error gracefully" do |method_name, args, error_class, log_method, log_fragment, exit_expected: false, expected_result: nil|
+    before do
+      allow(mock_client).to receive(method_name).and_raise(error_class.new({ message: "Mocked error" }))
+      allow(Cafeznik::Log).to receive(log_method)
+      allow(Kernel).to receive(:exit) if exit_expected
+    end
+
+    if exit_expected
+      it "raises SystemExit" do
+        expect { source.send(*args) }.to raise_error(SystemExit)
+      end
+
+      it "logs a fatal error message" do
+        begin
+          source.send(*args)
+        rescue SystemExit
+          # allow the test to proceed
+        end
+        expect(Cafeznik::Log).to have_received(log_method).with(include(log_fragment))
+      end
+    else
+      it "returns #{expected_result.inspect}" do
+        expect(source.send(*args)).to eq(expected_result)
+      end
+
+      it "logs an error message" do
+        source.send(*args)
+        expect(Cafeznik::Log).to have_received(log_method).with(include(log_fragment))
+      end
+    end
   end
 
   shared_examples "handles API errors gracefully" do |method, args|
@@ -54,7 +95,8 @@ RSpec.describe Cafeznik::Source::GitHub do
       rescue SystemExit
         # Allow the test to proceed
       end
-      expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline, or something is keeping you from connecting"))
+      expect(Cafeznik::Log).to have_received(:fatal)
+        .with(include("You might be offline, or something is keeping you from connecting"))
     end
   end
 
@@ -67,8 +109,9 @@ RSpec.describe Cafeznik::Source::GitHub do
       end
 
       it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo:) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal).with(include("You might be offline"))
+        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
+        expect(Cafeznik::Log).to have_received(:fatal)
+          .with(include("You might be offline"))
       end
     end
 
@@ -80,8 +123,9 @@ RSpec.describe Cafeznik::Source::GitHub do
       end
 
       it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo:) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal).with(include("Unable to connect to GitHub"))
+        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
+        expect(Cafeznik::Log).to have_received(:fatal)
+          .with(include("Unable to connect to GitHub"))
       end
     end
 
@@ -93,8 +137,9 @@ RSpec.describe Cafeznik::Source::GitHub do
       end
 
       it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo:) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal).with(include("Repo not found"))
+        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
+        expect(Cafeznik::Log).to have_received(:fatal)
+          .with(include("Repo not found"))
       end
     end
   end
@@ -110,9 +155,7 @@ RSpec.describe Cafeznik::Source::GitHub do
     context "when a token is set in ENV" do
       let(:env_token) { "env_token" }
 
-      before do
-        allow(tty_command).to receive(:run)
-      end
+      before { allow(tty_command).to receive(:run) }
 
       it "returns the token from ENV" do
         expect(source.send(:access_token)).to eq("env_token")
@@ -128,9 +171,8 @@ RSpec.describe Cafeznik::Source::GitHub do
       let(:env_token) { nil }
 
       before do
-        allow(tty_command).to receive(:run).and_return(
-          instance_double(TTY::Command::Result, out: "gh_token\n")
-        )
+        allow(tty_command).to receive(:run)
+          .and_return(instance_double(TTY::Command::Result, out: "gh_token\n"))
       end
 
       it "fetches the token via gh CLI" do
@@ -148,9 +190,8 @@ RSpec.describe Cafeznik::Source::GitHub do
           out: nil,
           err: "Error message"
         )
-        allow(tty_command).to receive(:run).and_raise(
-          TTY::Command::ExitError.new("gh auth token failed", result_double)
-        )
+        allow(tty_command).to receive(:run)
+          .and_raise(TTY::Command::ExitError.new("gh auth token failed", result_double))
       end
 
       it "logs an error and exits" do
@@ -184,51 +225,44 @@ RSpec.describe Cafeznik::Source::GitHub do
   end
 
   describe "#tree" do
-    let(:mock_tree) do
-      [
-        double(path: "README.md", type: "blob"),
-        double(path: "src", type: "tree"),
-        double(path: "src/main.rb", type: "blob")
-      ]
-    end
-
-    before do
-      allow(mock_client).to receive(:repository).with(repo).and_return(double(default_branch: "main"))
-      allow(mock_client).to receive(:tree).with(repo, "main", recursive: true).and_return(double(tree: mock_tree))
-    end
-
     it "returns a sorted list of files and directories" do
-      expect(source.tree).to eq(["./", "README.md", "src/", "src/main.rb"])
+      expected_tree = mock_github_tree.map { |entry| entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path] }.sort
+      expect(source.tree).to eq(["./"] + expected_tree)
     end
 
     it_behaves_like "handles API errors gracefully", :tree, [:tree]
   end
 
   describe "#all_files" do
-    let(:mock_tree) do
-      [
-        double(path: "README.md", type: "blob"),
-        double(path: "src", type: "tree"),
-        double(path: "src/main.rb", type: "blob")
-      ]
-    end
-
     before do
-      allow(source).to receive(:tree).and_return(["./", "README.md", "src/", "src/main.rb"])
+      allow(source).to receive(:tree).and_return(
+        mock_github_tree.map do |entry|
+          entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path]
+        end
+      )
     end
 
     it "returns only non-directory files" do
-      expect(source.all_files).to eq(["README.md", "src/main.rb"])
+      expected_files = mock_github_tree.select { |entry| entry[:type] != "tree" }
+                                       .map { |entry| entry[:path] }
+      expect(source.all_files).to eq(expected_files)
     end
   end
 
   describe "#expand_dir" do
     before do
-      allow(source).to receive(:tree).and_return(["./", "README.md", "src/", "src/main.rb"])
+      allow(source).to receive(:tree).and_return(
+        mock_github_tree.map do |entry|
+          entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path]
+        end
+      )
     end
 
     it "returns all files in a directory" do
-      expect(source.expand_dir("src/")).to eq(["src/main.rb"])
+      # For example, expanding the "src/" directory should return all files under it that are not directories.
+      expected = mock_github_tree.select { |entry| entry[:path].start_with?("src/") && entry[:type] != "tree" }
+                                 .map { |entry| entry[:path] }
+      expect(source.expand_dir("src/")).to eq(expected)
     end
   end
 
