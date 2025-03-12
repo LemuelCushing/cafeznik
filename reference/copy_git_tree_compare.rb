@@ -19,6 +19,8 @@ output = []
 
 # Append content of each file with headers (tail-like behavior)
 files.each do |file|
+  # skip images, pdf and other binary files
+  next if file =~ /\.(png|jpg|jpeg|gif|pdf|ico|woff|woff2|ttf|eot|svg|zip|tar|gz|mp4|mp3|wav|doc|docx|xls|xlsx)$/i
   output << "==> #{file} <==\n"
   file_content, _ = Open3.capture2("tail", "-n", "+1", file)
   output << file_content unless file_content.strip.empty?
