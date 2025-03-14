@@ -37,7 +37,7 @@ module Cafeznik
 
     private
 
-    memoize def build_content = [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
+    def build_content = [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
 
     memoize def files_contents
       Log.debug "Processing #{@file_paths.size} files"
@@ -50,7 +50,7 @@ module Cafeznik
       end
     end
 
-    memoize def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
+    def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
 
     def confirm_size!

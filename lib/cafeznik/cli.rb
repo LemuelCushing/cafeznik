@@ -1,5 +1,4 @@
 require "thor"
-
 module Cafeznik
   class CLI < Thor
     def self.exit_on_failure? = true
@@ -11,9 +10,16 @@ module Cafeznik
     class_option :grep, type: :string, aliases: "-g", desc: "Filter files containing the specified content"
     class_option :exclude, type: :array, aliases: "-e", desc: "Exclude files/folders matching patterns"
 
+    map %w[-v --version] => :version
+
+    desc "version", "Show version"
+    def version
+      puts "Cafeznik #{Cafeznik::VERSION}"
+      exit
+    end
+
     desc "default", "Select files, copy to clipboard; use --repo/-r for GitHub repository"
     method_option :repo, type: :string, aliases: "-r", desc: "GitHub repository (owner/repo format)"
-
     default_task :default
 
     def default
@@ -21,12 +27,11 @@ module Cafeznik
       Log.info "Running in #{repo ? 'GitHub' : 'local'} mode"
 
       source = determine_source
+      file_paths = Selector.new(source).select
 
-      selector = Selector.new(source)
-      file_paths = selector.select
-
-      Content.new( # TODO: find better name than Content, perhaps Clipboard?
-        source:, file_paths:,
+      Content.new(
+        source: source,
+        file_paths: file_paths,
         include_headers: !options[:no_header],
         include_tree: options[:with_tree]
       ).copy_to_clipboard
