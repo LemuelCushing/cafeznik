@@ -1,3 +1,3 @@
 module Cafeznik
-  VERSION = "0.5.5".freeze
+  VERSION = "0.5.61".freeze
 end
