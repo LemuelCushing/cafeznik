@@ -28,6 +28,16 @@ RSpec.describe Cafeznik::Source::Local do
       results = source.public_send(described_method)
       expect(results).not_to include("ignored/secret.txt", "debug.log", "src/error.log")
     end
+
+    it "excludes the usual suspects" do
+      results = source.public_send(described_method)
+      expect(results).not_to include("assets/image.png", "assets/document.pdf")
+    end
+
+    it "does not ignore metadata files" do
+      results = source.public_send(described_method)
+      expect(results).to include("assets/image.png.meta")
+    end
   end
 
   describe "#tree" do
@@ -42,20 +52,11 @@ RSpec.describe Cafeznik::Source::Local do
     end
 
     context "with special characters" do
-      before do
-        FileUtils.mkdir_p("special")
-        {
-          "special/with spaces.rb" => "# Spacey",
-          "special/special!@#.rb" => "# Special!",
-          "special/utf8_χξς.rb" => "# Barbarian"
-        }.each { |path, content| File.write(path, content) }
-      end
-
       it "handles special characters in paths" do
         expect(source.tree).to include(
           "special/with spaces.rb",
           "special/special!@#.rb",
-          "special/utf8_χξς.rb"
+          "special/ut-fu_χ𓆑𒀭.rb"
         )
       end
     end
@@ -133,12 +134,6 @@ RSpec.describe Cafeznik::Source::Local do
 
   describe "with grep filter" do
     let(:grep) { "Helper" }
-
-    before do
-      File.write("src/other.rb", "class Other; end") # TODO: do I need this?
-      File.write("src/with_helper.rb", "include Helper") # TODO: move this to the structure above?
-      File.write("docs/helper.md", "Helper docs") # TODO: move this to the structure above?
-    end
 
     it "only includes matching files" do
       expect(source.tree).to include("src/lib/helper.rb", "src/with_helper.rb")

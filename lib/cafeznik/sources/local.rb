@@ -7,6 +7,7 @@ module Cafeznik
     class Local < Base
       include Memery
       def initialize(grep: nil, exclude: [])
+        Log.debug "Local source initialized with grep: #{grep}, exclude: #{exclude}"
         super
         Log.fatal "fd not installed. We depend on it. Get it!" unless ToolChecker.fd_available?
 
@@ -14,7 +15,6 @@ module Cafeznik
       end
 
       memoize def tree
-        Log.debug "Building file tree#{@grep ? ' with grep filter' : ''}, #{@exclude ? "excluding: #{@exclude.join(',')}" : ''}"
         files = @grep ? grepped_files : full_tree
         files.empty? ? [] : ["./"] + files.sort
       end

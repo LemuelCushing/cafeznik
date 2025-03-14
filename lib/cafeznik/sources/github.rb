@@ -1,7 +1,6 @@
 require_relative "base"
 require "octokit"
 require "base64"
-require "resolv" # TODO: why is this here?
 
 module Cafeznik
   module Source
@@ -20,7 +19,7 @@ module Cafeznik
         end
       rescue Octokit::Error => e
         Log.error "Error fetching GitHub tree: #{e.message}"
-        nil
+        []
       end
 
       def content(path)
@@ -59,7 +58,7 @@ module Cafeznik
       def full_tree
         branch = @client.repository(@repo).default_branch
         # get all all paths and add a trailing slash for directories
-        paths = @client.tree(@repo, branch, recursive: true).tree.map { "#{_1.path}#{'/' if _1.type == 'tree'}" }
+        paths = @client.tree(@repo, branch, recursive: true).tree.map { "#{it.path}#{'/' if it.type == 'tree'}" }
         (["./"] + paths).sort
       end
 

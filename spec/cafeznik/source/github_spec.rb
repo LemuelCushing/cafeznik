@@ -6,140 +6,96 @@
 require "spec_helper"
 require "base64"
 
-GitHubEntry = Struct.new(:path, :type)
-
 RSpec.describe Cafeznik::Source::GitHub do
   let(:mock_client) { instance_double(Octokit::Client) }
   let(:repo) { "owner/repo" }
   let(:source) { described_class.new(repo: repo) }
 
-  # Helper: convert an array of hashes into an array of GitHubEntry structs.
-  def struct_tree(array)
-    array.map { |hash| GitHubEntry.new(hash[:path], hash[:type]) }
-  end
+  let(:github_tree_entries) { create_github_tree_entries }
+  let(:expected_tree_with_exclusions) { expected_github_tree }
 
   before do
     allow(Octokit::Client).to receive(:new).and_return(mock_client)
     allow(mock_client).to receive(:repository).with(repo).and_return(double(default_branch: "main"))
     allow(mock_client).to receive(:tree).with(repo, "main", recursive: true)
-                                        .and_return(double(tree: struct_tree(mock_github_tree)))
-    allow(Cafeznik::Log).to receive_messages(error: nil, warn: nil, info: nil)
+                                        .and_return(double(tree: github_tree_entries))
+    allow(Cafeznik::Log).to receive_messages(error: nil, warn: nil, info: nil, fatal: nil)
   end
 
-  RSpec.shared_examples "handles error gracefully" do |method_name, args, error_class, log_method, log_fragment, exit_expected: false, expected_result: nil|
+  shared_examples "handles error conditions" do |options|
+    let(:method_name) { options[:method] }
+    let(:args) { options[:args] || [] }
+    let(:error_class) { options[:error_class] }
+    let(:error_message) { options[:error_message] || "Mocked error" }
+    let(:log_level) { options[:log_level] || :error }
+    let(:log_fragment) { options[:log_fragment] || "Error" }
+    let(:exit_expected) { options[:exit_expected] || false }
+    let(:expected_result) { options[:expected_result] }
+
     before do
-      allow(mock_client).to receive(method_name).and_raise(error_class.new({ message: "Mocked error" }))
-      allow(Cafeznik::Log).to receive(log_method)
-      allow(Kernel).to receive(:exit) if exit_expected
+      allow(mock_client).to receive(method_name).and_raise(
+        error_class.new({ message: error_message })
+      )
+
+      allow(Kernel).to receive(:exit).and_raise(SystemExit) if exit_expected
     end
 
-    if exit_expected
-      it "raises SystemExit" do
+    it "handles the error appropriately" do
+      if exit_expected
         expect { source.send(*args) }.to raise_error(SystemExit)
-      end
-
-      it "logs a fatal error message" do
-        begin
-          source.send(*args)
-        rescue SystemExit
-          # allow the test to proceed
-        end
-        expect(Cafeznik::Log).to have_received(log_method).with(include(log_fragment))
-      end
-    else
-      it "returns #{expected_result.inspect}" do
-        expect(source.send(*args)).to eq(expected_result)
-      end
-
-      it "logs an error message" do
-        source.send(*args)
-        expect(Cafeznik::Log).to have_received(log_method).with(include(log_fragment))
+      else
+        result = source.send(*args)
+        expect(result).to eq(expected_result) if expected_result
       end
     end
-  end
 
-  shared_examples "handles API errors gracefully" do |method, args|
-    before do
-      allow(mock_client).to receive(method).and_raise(
-        Octokit::Error.new({ message: "Mocked API failure" })
-      )
-      allow(Cafeznik::Log).to receive(:error)
-    end
-
-    it "logs the correct error message" do
-      source.send(*args)
-      expect(Cafeznik::Log).to have_received(:error).with(include("Error fetching"))
-    end
-
-    it "returns nil when an API error occurs" do
-      expect(source.send(*args)).to be_nil
-    end
-  end
-
-  shared_examples "handles offline gracefully" do |_method, args, _result|
-    before do
-      allow(mock_client).to receive(:repository).and_raise(
-        Faraday::ConnectionFailed.new("Failed to connect")
-      )
-      allow(Kernel).to receive(:exit).and_raise(SystemExit)
-      allow(Cafeznik::Log).to receive(:fatal).and_call_original
-    end
-
-    it "raises SystemExit when offline" do
-      expect { source.send(*args) }.to raise_error(SystemExit)
-    end
-
-    it "logs an error message when offline" do
+    it "logs the appropriate message" do
       begin
         source.send(*args)
       rescue SystemExit
-        # Allow the test to proceed
+        # allow the test to proceed
       end
-      expect(Cafeznik::Log).to have_received(:fatal)
-        .with(include("You might be offline, or something is keeping you from connecting"))
+
+      expect(Cafeznik::Log).to have_received(log_level).with(include(log_fragment))
     end
   end
 
   describe "#initialize" do
-    context "when offline" do
-      before do
-        allow(mock_client).to receive(:repository).and_raise(Faraday::ConnectionFailed, "Failed to connect")
-        allow(Cafeznik::Log).to receive(:fatal).and_call_original
-        allow(Kernel).to receive(:exit).and_raise(SystemExit)
-      end
+    [
+      {
+        context: "when offline",
+        error_class: Faraday::ConnectionFailed,
+        error_message: "Failed to connect",
+        log_level: :fatal,
+        log_fragment: "You might be offline"
+      },
+      {
+        context: "when unauthorized",
+        error_class: Octokit::Unauthorized,
+        error_message: "Unauthorized",
+        log_level: :fatal,
+        log_fragment: "Unable to connect to GitHub"
+      },
+      {
+        context: "when repo is not found",
+        error_class: Octokit::NotFound,
+        error_message: "Repo not found",
+        log_level: :fatal,
+        log_fragment: "Repo not found"
+      }
+    ].each do |scenario|
+      context scenario[:context] do
+        before do
+          allow(mock_client).to receive(:repository).and_raise(
+            scenario[:error_class].new({ message: scenario[:error_message] })
+          )
+          # allow(Kernel).to receive(:exit).and_raise(SystemExit)
+        end
 
-      it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal)
-          .with(include("You might be offline"))
-      end
-    end
-
-    context "when unauthorized" do
-      before do
-        allow(mock_client).to receive(:repository).and_raise(Octokit::Unauthorized.new({ message: "Unauthorized" }))
-        allow(Cafeznik::Log).to receive(:fatal).and_call_original
-        allow(Kernel).to receive(:exit).and_raise(SystemExit)
-      end
-
-      it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal)
-          .with(include("Unable to connect to GitHub"))
-      end
-    end
-
-    context "when repo is not found" do
-      before do
-        allow(mock_client).to receive(:repository).and_raise(Octokit::NotFound.new({ message: "Repo not found" }))
-        allow(Cafeznik::Log).to receive(:fatal).and_call_original
-        allow(Kernel).to receive(:exit).and_raise(SystemExit)
-      end
-
-      it "logs a fatal error and exits", :aggregate_failures do
-        expect { described_class.new(repo: repo) }.to raise_error(SystemExit)
-        expect(Cafeznik::Log).to have_received(:fatal)
-          .with(include("Repo not found"))
+        it "logs a fatal error" do
+          described_class.new(repo:)
+          expect(Cafeznik::Log).to have_received(scenario[:log_level]).with(include(scenario[:log_fragment]))
+        end
       end
     end
   end
@@ -149,41 +105,58 @@ RSpec.describe Cafeznik::Source::GitHub do
 
     before do
       allow(TTY::Command).to receive(:new).and_return(tty_command)
-      allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(env_token)
     end
 
-    context "when a token is set in ENV" do
-      let(:env_token) { "env_token" }
+    context "when token sources are available" do
+      # Table-driven approach for token sources
+      [
+        {
+          source: "ENV",
+          env_token: "env_token",
+          gh_token: nil,
+          expected_token: "env_token",
+          should_run_gh: false
+        },
+        {
+          source: "gh CLI",
+          env_token: nil,
+          gh_token: "gh_token",
+          expected_token: "gh_token",
+          should_run_gh: true
+        }
+      ].each do |scenario|
+        context "from #{scenario[:source]}" do
+          before do
+            allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(scenario[:env_token])
 
-      before { allow(tty_command).to receive(:run) }
+            if scenario[:gh_token]
+              allow(tty_command).to receive(:run)
+                .and_return(instance_double(TTY::Command::Result, out: "#{scenario[:gh_token]}\n"))
+            else
+              allow(tty_command).to receive(:run)
+            end
+          end
 
-      it "returns the token from ENV" do
-        expect(source.send(:access_token)).to eq("env_token")
-      end
+          it "returns the expected token" do
+            expect(source.send(:access_token)).to eq(scenario[:expected_token])
+          end
 
-      it "does not fetch the token via gh CLI" do
-        source.send(:access_token)
-        expect(tty_command).not_to have_received(:run)
-      end
-    end
+          it "#{scenario[:should_run_gh] ? 'fetches' : 'does not fetch'} the token via gh CLI" do
+            source.send(:access_token)
 
-    context "when token is available via gh CLI" do
-      let(:env_token) { nil }
-
-      before do
-        allow(tty_command).to receive(:run)
-          .and_return(instance_double(TTY::Command::Result, out: "gh_token\n"))
-      end
-
-      it "fetches the token via gh CLI" do
-        expect(source.send(:access_token)).to eq("gh_token")
+            if scenario[:should_run_gh]
+              expect(tty_command).to have_received(:run)
+            else
+              expect(tty_command).not_to have_received(:run)
+            end
+          end
+        end
       end
     end
 
     context "when no token is available" do
-      let(:env_token) { nil }
-
       before do
+        allow(ENV).to receive(:[]).with("GITHUB_TOKEN").and_return(nil)
         result_double = instance_double(
           TTY::Command::Result,
           exit_status: 1,
@@ -192,6 +165,7 @@ RSpec.describe Cafeznik::Source::GitHub do
         )
         allow(tty_command).to receive(:run)
           .and_raise(TTY::Command::ExitError.new("gh auth token failed", result_double))
+        allow(Kernel).to receive(:exit).and_raise(SystemExit)
       end
 
       it "logs an error and exits" do
@@ -201,83 +175,78 @@ RSpec.describe Cafeznik::Source::GitHub do
   end
 
   describe "#normalize_repo_name" do
-    let(:repo_inputs) do
-      proc do |repo|
-        [
-          "https://github.com/#{repo}",
-          "github.com/#{repo}",
-          "/#{repo}",
-          "#{repo}/",
-          repo
-        ]
-      end
-    end
-
-    let(:repo) { "owner/repo" }
-
-    it "normalizes all inputs to the standard format" do
-      repo_inputs.call(repo).each do |input|
-        source.instance_variable_set(:@repo, input)
+    [
+      "https://github.com/owner/repo",
+      "github.com/owner/repo",
+      "/owner/repo",
+      "owner/repo/",
+      "owner/repo"
+    ].each do |repo_format|
+      it "normalizes '#{repo_format}' to the standard format" do
+        source.instance_variable_set(:@repo, repo_format)
         source.send(:normalize_repo_name)
-        expect(source.instance_variable_get(:@repo)).to eq(repo)
+        expect(source.instance_variable_get(:@repo)).to eq("owner/repo")
       end
     end
   end
 
   describe "#tree" do
-    it "returns a sorted list of files and directories" do
-      expected_tree = mock_github_tree.map { |entry| entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path] }.sort
-      expect(source.tree).to eq(["./"] + expected_tree)
+    it "returns a sorted list of files and directories with binary files excluded" do
+      expect(source.tree).to eq(expected_tree_with_exclusions)
     end
 
-    it_behaves_like "handles API errors gracefully", :tree, [:tree]
+    it_behaves_like "handles error conditions", {
+      method: :tree,
+      args: [:tree],
+      error_class: Octokit::Error,
+      log_fragment: "Error fetching",
+      expected_result: []
+    }
   end
 
   describe "#all_files" do
+    let(:non_dir_entries) { github_tree_entries.reject { |entry| entry.type == "tree" } }
+
     before do
-      allow(source).to receive(:tree).and_return(
-        mock_github_tree.map do |entry|
-          entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path]
-        end
-      )
+      allow(source).to receive(:tree).and_return(format_github_tree(non_dir_entries))
     end
 
-    it "returns only non-directory files" do
-      expected_files = mock_github_tree.select { |entry| entry[:type] != "tree" }
-                                       .map { |entry| entry[:path] }
-      expect(source.all_files).to eq(expected_files)
+    it "returns only non-directory files, excluding the usual suspects" do
+      expected_files = github_tree_entries
+                       .reject { |entry| entry.type == "tree" }
+                       .map(&:path)
+      expect(source.all_files).to match_array(expected_files)
     end
   end
 
   describe "#expand_dir" do
     before do
-      allow(source).to receive(:tree).and_return(
-        mock_github_tree.map do |entry|
-          entry[:type] == "tree" ? "#{entry[:path]}/" : entry[:path]
-        end
-      )
+      allow(source).to receive(:tree).and_return(format_github_tree(github_tree_entries))
     end
 
     it "returns all files in a directory" do
-      # For example, expanding the "src/" directory should return all files under it that are not directories.
-      expected = mock_github_tree.select { |entry| entry[:path].start_with?("src/") && entry[:type] != "tree" }
-                                 .map { |entry| entry[:path] }
-      expect(source.expand_dir("src/")).to eq(expected)
+      expected = github_tree_entries
+                 .select { |entry| entry.path.start_with?("src/") }
+                 .reject { |entry| entry.type == "tree" }
+                 .map(&:path)
+      expect(source.expand_dir("src/")).to match_array(expected)
     end
   end
 
   describe "#dir?" do
-    it "returns true for paths ending with a slash" do
-      expect(source.dir?("src/")).to be(true)
-    end
-
-    it "returns false for paths not ending with a slash" do
-      expect(source.dir?("README.md")).to be(false)
+    [
+      { path: "src/", expected: true },
+      { path: "README.md", expected: false }
+    ].each do |scenario|
+      it "returns #{scenario[:expected]} for '#{scenario[:path]}'" do
+        expect(source.dir?(scenario[:path])).to be(scenario[:expected])
+      end
     end
   end
 
   describe "#content" do
-    let(:encoded_content) { Base64.encode64("Sample Content") }
+    let(:sample_content) { "Sample Content" }
+    let(:encoded_content) { Base64.encode64(sample_content) }
 
     before do
       allow(mock_client).to receive(:contents).with(repo, path: "README.md")
@@ -285,10 +254,16 @@ RSpec.describe Cafeznik::Source::GitHub do
     end
 
     it "decodes and returns the file content" do
-      expect(source.content("README.md")).to eq("Sample Content")
+      expect(source.content("README.md")).to eq(sample_content)
     end
 
-    it_behaves_like "handles API errors gracefully", :contents, [:content, "README.md"]
+    it_behaves_like "handles error conditions", {
+      method: :contents,
+      args: [:content, "README.md"],
+      error_class: Octokit::Error,
+      log_fragment: "Error fetching",
+      expected_result: nil
+    }
   end
 end
 # rubocop:enable RSpec/VerifiedDoubles

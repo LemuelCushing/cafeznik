@@ -5,14 +5,13 @@ module Cafeznik
     def self.exit_on_failure? = true
     def self.user_agrees? = $stdin.gets.strip.casecmp("y").zero?
 
-    class_option :verbose, type: :boolean, aliases: "-v", default: false, desc: "Run in verbose mode"
+    class_option :verbose, type: :boolean, aliases: "--debug", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers"
     class_option :with_tree, type: :boolean, aliases: "-t", default: false, desc: "Include file tree"
     class_option :grep, type: :string, aliases: "-g", desc: "Filter files containing the specified content"
     class_option :exclude, type: :array, aliases: "-e", desc: "Exclude files/folders matching patterns"
 
     desc "default", "Select files, copy to clipboard; use --repo/-r for GitHub repository"
-    # TODO: why is this a method_option and not a class_option?
     method_option :repo, type: :string, aliases: "-r", desc: "GitHub repository (owner/repo format)"
 
     default_task :default

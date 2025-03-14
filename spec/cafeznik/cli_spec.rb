@@ -8,14 +8,16 @@ RSpec.describe Cafeznik::CLI do
   let(:mock_selector) { instance_double(Cafeznik::Selector, select: ["file1.txt"]) }
   let(:mock_content) { instance_double(Cafeznik::Content) }
   let(:logger_output) { StringIO.new }
-  let(:logger) { Logger.new(logger_output) }
 
   before do
     allow(Cafeznik::Selector).to receive(:new).and_return(mock_selector)
     allow(Cafeznik::Content).to receive(:new).and_return(mock_content)
     allow(mock_content).to receive(:copy_to_clipboard)
 
-    allow(Cafeznik::Log).to receive(:logger).and_return(logger)
+    allow(Cafeznik::Log).to receive(:verbose=)
+    allow(Cafeznik::Log).to receive(:info) do |msg|
+      logger_output.puts(msg)
+    end
 
     stub_request(:get, %r{https://api\.github\.com/repos/.*})
       .to_return(status: 200, body: "{}", headers: { "Content-Type" => "application/json" })
@@ -55,14 +57,13 @@ RSpec.describe Cafeznik::CLI do
     end
 
     it "enables verbose logging with --verbose option" do
-      allow(Cafeznik::Log).to receive(:verbose=).and_call_original
       described_class.start(["default", "--verbose"])
       expect(Cafeznik::Log).to have_received(:verbose=).with(true)
     end
   end
 
   describe "logging behavior" do
-    it "logs start and completion messages" do # TODO: test incomplete
+    it "logs start and completion messages" do
       described_class.start(args)
       expect(logger_output.string).to include("Running in local mode")
     end

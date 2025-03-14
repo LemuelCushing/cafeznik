@@ -54,3 +54,6 @@ RSpec/SpecFilePathFormat:
   Enabled: true
   CustomTransform:
     GitHub: github
+
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false # should probably just write better tests

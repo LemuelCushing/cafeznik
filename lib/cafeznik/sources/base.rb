@@ -1,11 +1,26 @@
 module Cafeznik
   module Source
     class Base
+      BINARY_EXCLUDES = [
+        # Images and media
+        %w[*.png *.jpg *.jpeg *.gif *.svg *.ico],
+        %w[*.pdf *.mov *.mp4 *.mp3 *.wav],
+        # Archives
+        %w[*.zip *.tar.gz *.tgz *.rar *.7z],
+        # Compiled code
+        %w[*.pyc *.pyo *.class *.jar *.dll],
+        %w[*.exe *.so *.dylib *.o *.obj],
+        # Minified files
+        %w[*.min.js *.min.css],
+        # Pesky necessities
+        %w[.git .DS_Store Thumbs.db]
+      ].flatten.freeze
+
       # TODO: change to `root: nil, repo: nil`
       def initialize(repo: nil, grep: nil, exclude: [])
         @repo = repo
         @grep = grep
-        @exclude = exclude
+        @exclude = Array(exclude) + BINARY_EXCLUDES
       end
 
       def tree = raise NotImplementedError
