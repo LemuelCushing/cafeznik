@@ -19,6 +19,7 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "base64", "~> 0.2"
   spec.add_dependency "clipboard", "~> 2.0"
+  spec.add_dependency "concurrent-ruby", "~> 1.3"
   spec.add_dependency "faraday-multipart", "~> 1.0"
   spec.add_dependency "faraday-retry", "~> 2.0"
   spec.add_dependency "memery", "~> 1.6"
@@ -31,6 +32,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop-performance", "~> 1.22"
   spec.add_development_dependency "rubocop-rspec", "~> 3.2"
   spec.add_development_dependency "standard", "~> 1.41"
-  spec.add_development_dependency "super_diff"
+  spec.add_development_dependency "super_diff", "~> 0.15"
   spec.add_development_dependency "webmock", "~> 3.24"
 end

@@ -5,6 +5,9 @@ require "base64"
 module Cafeznik
   module Source
     class GitHub < Base
+      MAX_RETRIES = 3
+      BASE_DELAY = 2
+
       def initialize(repo:, grep: nil, exclude: [])
         super
         @client = Octokit::Client.new(access_token:, auto_paginate: true)
@@ -23,7 +26,7 @@ module Cafeznik
       end
 
       def content(path)
-        Base64.decode64 @client.contents(@repo, path:)[:content]
+        fetch_file_content_with_retry(path)
       rescue Octokit::Error => e
         Log.error "Error fetching GitHub content: #{e.message}"
         nil
@@ -79,6 +82,22 @@ module Cafeznik
       rescue Octokit::Error => e
         Log.error "Error during search for pattern '#{pattern}': #{e.message}"
         []
+      end
+
+      def fetch_file_content_with_retry(path, retries = MAX_RETRIES, base_delay = BASE_DELAY)
+        content_data = @client.contents(@repo, path: path)[:content]
+        Base64.decode64(content_data)
+      rescue Octokit::TooManyRequests
+        handle_rate_limit(path, retries, base_delay)
+      end
+
+      def handle_rate_limit(path, retries, base_delay)
+        return raise if retries <= 0
+
+        delay = (base_delay**(MAX_RETRIES - retries + 1)) * (0.8 + (0.4 * rand))
+        Log.warn "Rate limit exceeded, waiting #{delay.round(1)} seconds..."
+        sleep(delay)
+        fetch_file_content_with_retry(path, retries - 1, base_delay)
       end
     end
   end
