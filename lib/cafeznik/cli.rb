@@ -7,8 +7,8 @@ module Cafeznik
     class_option :verbose, type: :boolean, aliases: "--debug", default: false, desc: "Run in verbose mode"
     class_option :no_header, type: :boolean, default: false, desc: "Exclude headers"
     class_option :with_tree, type: :boolean, aliases: "-t", default: false, desc: "Include file tree"
-    class_option :grep, type: :string, aliases: "-g", desc: "Filter files containing the specified content"
-    class_option :exclude, type: :array, aliases: "-e", desc: "Exclude files/folders matching patterns"
+    class_option :grep, type: :string, aliases: "-g", desc: "Filter files containing the specified content", banner: "Patterny Pattern"
+    class_option :exclude, type: :array, aliases: "-e", desc: "Exclude files/folders matching patterns", banner: "glob *.ext **/dir"
 
     map %w[-v --version] => :version
 
@@ -36,6 +36,9 @@ module Cafeznik
         include_tree: options[:with_tree]
       ).copy_to_clipboard
     end
+
+    desc "help [COMMAND]", "Display detailed help information"
+    def help = Help.display(self)
 
     private
 

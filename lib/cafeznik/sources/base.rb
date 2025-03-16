@@ -3,17 +3,21 @@ module Cafeznik
     class Base
       BINARY_EXCLUDES = [
         # Images and media
-        %w[*.png *.jpg *.jpeg *.gif *.svg *.ico],
-        %w[*.pdf *.mov *.mp4 *.mp3 *.wav],
+        %w[*.png *.jpg *.jpeg *.gif *.svg *.ico
+           *.pdf *.mov *.mp4 *.mp3 *.wav],
         # Archives
         %w[*.zip *.tar.gz *.tgz *.rar *.7z],
         # Compiled code
-        %w[*.pyc *.pyo *.class *.jar *.dll],
-        %w[*.exe *.so *.dylib *.o *.obj],
+        %w[*.pyc *.pyo *.class *.jar *.dll
+           *.exe *.so *.dylib *.o *.obj],
         # Minified files
         %w[*.min.js *.min.css],
+        # Lockfiles
+        %w[package-lock.json yarn.lock Gemfile.lock],
+        # Fonts
+        %w[*.woff *.woff2 *.ttf *.eot *.otf],
         # Pesky necessities
-        %w[.git .DS_Store Thumbs.db]
+        %w[.git .DS_Store Thumbs.db .ruby-lsp]
       ].flatten.freeze
 
       # TODO: change to `root: nil, repo: nil`
