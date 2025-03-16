@@ -65,7 +65,7 @@ module Cafeznik
       Log.info "Selected #{paths.size} files"
       return paths if paths.size <= MAX_FILES
 
-      Log.warn "Selected more than #{MAX_FILES} files. Continue? (y/N)"
+      Log.warn "Selected more than #{MAX_FILES} files (#{paths.size}). Continue? (y/N)"
       unless CLI.user_agrees?
         Log.info "Copy operation cancelled by user"
         exit 0

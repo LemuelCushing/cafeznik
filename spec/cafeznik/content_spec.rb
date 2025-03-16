@@ -58,14 +58,8 @@ RSpec.describe Cafeznik::Content do
         allow(source).to receive(:content).with("file2.txt").and_return(nil)
       end
 
-      it "includes files with nil content in the output" do
+      it "excludes files with nil content" do
         content.copy_to_clipboard
-
-        expect(Clipboard).to have_received(:copy).with(expected_output_with_nil_content)
-      end
-
-      it "excludes files with nil content when skip_nil_content is set", skip: "TODO: implement" do
-        content.copy_to_clipboard(skip_nil_content: true)
 
         expect(Clipboard).to have_received(:copy).with(expected_output_without_nil_or_errored_content)
       end

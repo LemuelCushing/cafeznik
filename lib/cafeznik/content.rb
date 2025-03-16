@@ -1,25 +1,21 @@
 require "clipboard"
 require "concurrent"
 require "memery"
+require "tty-progressbar"
 
 module Cafeznik
   class Content
     include Memery
     MAX_LINES = 10_000
     THREAD_COUNT = [Concurrent.processor_count, 8].min
-    THREAD_TIMEOUT = 60 # seconds
+    THREAD_TIMEOUT = 20 # seconds
 
     def initialize(source:, file_paths:, include_headers:, include_tree:)
-      Log.debug "Initializing Content" do
-        <<~LOG
-          Source: #{source.class} file_paths: #{file_paths.size}
-          include_headers: #{include_headers} include_tree: #{include_tree}
-        LOG
-      end
       @source = source
       @file_paths = file_paths
       @include_headers = include_headers
       @include_tree = include_tree
+      log_init
     end
 
     def copy_to_clipboard
@@ -40,70 +36,81 @@ module Cafeznik
 
     private
 
+    def log_init
+      Log.debug "Initializing Content" do
+        <<~LOG
+          Source: #{@source.class} file_paths: #{@file_paths.size}
+          include_headers: #{@include_headers} include_tree: #{@include_tree}
+        LOG
+      end
+    end
+
     def build_content = [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
 
-    # memoize def files_contents
-    #   Log.debug "Processing #{@file_paths.size} files"
-    #   @file_paths.each_with_object([]) do |file, memo|
-    #     content = @source.content(file)
-    #     memo << (@include_headers ? with_header(content, file) : content) unless content.empty?
-    #   rescue StandardError => e
-    #     Log.error("Error fetching content for #{file}: #{e.message}")
-    #     nil
-    #   end
-    # end
-
-    memoize def files_contents
-      Log.debug "Processing #{@file_paths.size} files using #{THREAD_COUNT} threads"
-
-      results = []
-      mutex = Mutex.new
-      errors = []
-      progress = ProgressTracker.new(@file_paths.size)
-
-      thread_buffers = {}
-
-      # Create thread pool
-      pool = Concurrent::FixedThreadPool.new(THREAD_COUNT)
-
-      @file_paths.each do |file|
-        pool.post do
-          thread_id = Thread.current.object_id
-          thread_buffers[thread_id] ||= []
-          local_buffer = thread_buffers[thread_id]
-
-          begin
-            content = @source.content(file)
-            unless content.to_s.empty?
-              formatted = @include_headers ? with_header(content, file) : content
-              local_buffer << formatted
-            end
-            progress.increment
-          rescue StandardError => e
-            Log.error("Error fetching content for #{file}: #{e.message}")
-            mutex.synchronize do
-              errors << "Error with #{file}: #{e.message}"
-            end
-          end
-        end
-      end
-
-      pool.shutdown
-      unless pool.wait_for_termination(THREAD_TIMEOUT)
-        Log.warn "Thread pool did not shut down within #{THREAD_TIMEOUT} seconds, forcing termination"
-        pool.kill
-      end
-
-      # Collect results from thread-local buffers
-      thread_buffers.each_value do |buffer|
-        results.concat(buffer)
-      end
-
-      Log.warn "Completed with #{errors.size} errors" if errors.any?
-      results
-    end
     def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
+
+    memoize def files_contents
+      Log.debug "Processing #{@file_paths.size} files in #{THREAD_COUNT} threads"
+
+      bars = create_progress_bars
+      errors = Concurrent::Hash.new
+      executor = Concurrent::FixedThreadPool.new(THREAD_COUNT)
+
+      tasks = create_file_tasks(executor, bars, errors)
+
+      # Waits for all concurrent tasks to complete within the timeout, then returns their results as a compact array.
+      results = Concurrent::Promises.zip(*tasks).value!(THREAD_TIMEOUT).compact
+
+      executor.shutdown
+      executor.wait_for_termination(THREAD_TIMEOUT)
+
+      report_errors(errors) if errors.any?
+      results
+    end
+
+    def create_progress_bars
+      progress = TTY::ProgressBar::Multi.new("Processing files [:bar] :percent")
+      {
+        started: progress.register("Starting   [:bar] :current/:total", total: @file_paths.size),
+        finished: progress.register("Completed  [:bar] :current/:total", total: @file_paths.size)
+      }
+    end
+
+    def create_file_tasks(executor, bars, errors)
+      @file_paths.map do |file|
+        bars[:started].advance
+
+        Concurrent::Promises.future_on(executor) do
+          fetch_and_format_file(file, errors)
+        ensure
+          bars[:finished].advance
+        end
+      end
+    end
+
+    def fetch_and_format_file(file, errors)
+      content = @source.content(file)
+      if content && !content.empty?
+        @include_headers ? with_header(content, file) : content
+      end
+    rescue StandardError => e
+      errors[file] = e.message
+      Log.error("Error fetching content for #{file}: #{e.message}")
+      nil
+    end
+
+    def report_errors(errors)
+      Log.warn "Completed with #{errors.size} errors:"
+      errors.each.with_index(1) do |(file, message), i|
+        Log.warn "  #{i}. #{file}: #{message}"
+        break if i >= 5 && errors.size > 5
+      end
+
+      return unless errors.size > 5
+
+      Log.warn "  ... and #{errors.size - 5} more errors"
+    end
 
     def confirm_size!
       line_count = @content.lines.size
@@ -121,33 +128,5 @@ module Cafeznik
     end
 
     def suggest_tree_removal? = @content.lines.size <= MAX_LINES + @source.tree.size - 1
-  end
-end
-
-module Cafeznik
-  class ProgressTracker
-    def initialize(total, logger)
-      @total = total
-      @logger = logger
-      @current = 0
-      @last_percent = 0
-      @start_time = Time.now
-      @mutex = Mutex.new
-    end
-
-    def increment
-      @mutex.synchronize do
-        @current += 1
-        percent = (@current.to_f / @total * 100).round
-
-        if percent > @last_percent || @current == @total
-          elapsed = Time.now - @start_time
-          rate = @current / elapsed
-
-          @logger.info "Processing: #{percent}% complete (#{@current}/#{@total} files, #{rate.round(1)} files/sec)"
-          @last_percent = percent
-        end
-      end
-    end
   end
 end
