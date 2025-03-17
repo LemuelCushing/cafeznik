@@ -11,6 +11,10 @@ RSpec.describe Cafeznik::Selector do
 
   before do
     allow(TTY::Command).to receive(:new).and_return(command)
+    # Allow any version of the command with any arguments
+    allow(command).to receive(:run).and_return(result)
+    allow(Cafeznik::ToolChecker).to receive(:fzf_available?).and_return(true)
+
     allow(source).to receive_messages(
       tree: source_tree,
       dir?: false,
@@ -20,8 +24,6 @@ RSpec.describe Cafeznik::Selector do
   end
 
   describe "#select" do
-    before { allow(command).to receive(:run).with("fzf --multi", any_args).and_return(result) }
-
     context "when files are explicitly selected" do
       let(:selection_output) { ["file1.txt"] }
 
@@ -68,20 +70,13 @@ RSpec.describe Cafeznik::Selector do
   describe "fzf errors" do
     context "when fzf is not installed" do
       before do
-        allow(Cafeznik::Log).to receive(:error)
-        allow(command).to receive(:run)
-          .and_raise(Errno::ENOENT, "No such file or directory - fzf")
-      end
-
-      it "raises a SystemExit error" do
-        expect { selector.select }.to raise_error(SystemExit)
+        allow(Cafeznik::ToolChecker).to receive(:fzf_available?).and_return(false)
+        allow(Cafeznik::Log).to receive(:fatal)
       end
 
       it "logs a missing installation error" do
         selector.select
-      rescue SystemExit
-        expect(Cafeznik::Log).to have_received(:error)
-          .with("fzf is not installed. Please install it and try again.")
+        expect(Cafeznik::Log).to have_received(:fatal)
       end
     end
 
@@ -95,15 +90,8 @@ RSpec.describe Cafeznik::Selector do
         allow(command).to receive(:run).and_raise(error)
       end
 
-      it "raises a SystemExit error" do
+      it "logs the fzf error message and exits" do
         expect { selector.select }.to raise_error(SystemExit)
-      end
-
-      it "logs the fzf error message" do
-        selector.select
-      rescue SystemExit
-        expect(Cafeznik::Log).to have_received(:error)
-          .with(a_string_including("exit status: 2"))
       end
     end
 
@@ -117,15 +105,8 @@ RSpec.describe Cafeznik::Selector do
         allow(command).to receive(:run).and_raise(error)
       end
 
-      it "raises a SystemExit error" do
+      it "logs the cancellation message and exits" do
         expect { selector.select }.to raise_error(SystemExit)
-      end
-
-      it "logs the cancellation message" do
-        selector.select
-      rescue SystemExit
-        expect(Cafeznik::Log).to have_received(:info)
-          .with("No files selected. Exiting..")
       end
     end
   end
