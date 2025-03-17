@@ -37,8 +37,17 @@ module Cafeznik
       end
     end
 
+    def preview_command
+      return "" unless @source.is_a?(Cafeznik::Source::Local)
+
+      file_preview = ToolChecker.bat_available? ? "bat --style=numbers --color=always {}" : "tail -n +1 {}"
+      warn = "🌳 Preview tree may be off - greps and excludes are not taken into account 🌴\n #{'=' * 100}"
+
+      "([[ -d {} ]] && (echo '#{warn}'; tree --gitignore -C {} | head -n 50) || #{file_preview})"
+    end
+
     def run_fzf_command = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
-                                      .run("fzf --multi", stdin: @source.tree.join("\n"))
+                                      .run("fzf --multi --preview \"#{preview_command}\"", stdin: @source.tree.join("\n"))
                                       .out.split("\n")
 
     def handle_fzf_error(error)
@@ -53,9 +62,6 @@ module Cafeznik
     end
 
     def expand_paths(paths)
-      # TODO: I think I can remove the reject here, as it's already done in the source
-      # return @source.all_files.reject { |path| @source.exclude?(path) } if paths == [:all_files]
-
       paths.flat_map do |path|
         dir?(path) ? @source.expand_dir(path) : path
       end.uniq
