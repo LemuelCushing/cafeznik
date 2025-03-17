@@ -17,8 +17,8 @@ module Cafeznik
 
       def tree
         @_tree ||= begin
-          all_paths = @grep ? grep_files(@grep) : full_tree
-          all_paths.reject { |path| exclude?(path) }
+          all_paths = (@grep ? grep_files(@grep) : full_tree)
+          all_paths.reject { exclude?(it) }.push("./").sort
         end
       rescue Octokit::Error => e
         Log.error "Error fetching GitHub tree: #{e.message}"
@@ -60,9 +60,7 @@ module Cafeznik
 
       def full_tree
         branch = @client.repository(@repo).default_branch
-        # get all all paths and add a trailing slash for directories
-        paths = @client.tree(@repo, branch, recursive: true).tree.map { "#{it.path}#{'/' if it.type == 'tree'}" }
-        (["./"] + paths).sort
+        @client.tree(@repo, branch, recursive: true).tree.map { "#{it.path}#{'/' if it.type == 'tree'}" }
       end
 
       def fetch_token_via_gh
@@ -76,6 +74,7 @@ module Cafeznik
 
       def grep_files(pattern)
         Log.debug "Searching for pattern '#{pattern}' within #{@repo}"
+        Log.fatal "We can't search for empty patterns. Please provide a pattern to search for" if pattern.empty?
         results = @client.search_code("#{pattern} repo:#{@repo} in:file").items.map(&:path)
         Log.debug "Found #{results.size} files matching pattern '#{pattern}' in #{@repo}"
         results
