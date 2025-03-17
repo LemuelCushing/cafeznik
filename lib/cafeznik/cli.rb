@@ -50,8 +50,8 @@ module Cafeznik
       end
     end
 
-    def repo = options[:repo]
-    def grep = options[:grep]
     def exclude = options[:exclude] || []
+    def repo = options[:repo].tap { |r| Log.fatal("We can't do much without a repo when using -r/--repo") if r == "repo" }
+    def grep = options[:grep].tap { |g| Log.fatal("You gotta provide a search pattern when using -g/--grep") if g == "grep" }
   end
 end
