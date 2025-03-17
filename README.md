@@ -2,7 +2,7 @@
 
 _Not a fez-wearing cat in a track suit._
 
-There are [many](https://github.com/Dicklesworthstone/your-source-to-prompt.html?tab=readme-ov-file) code2prompt tools around, but this one is mine 🪖. It’s built with a sprinkle of practicality, a dash of irreverence, and plenty of laziness—exactly how a good developer tool should be.
+There are [many](https://github.com/Dicklesworthstone/your-source-to-prompt.html?tab=readme-ov-file) code2prompt tools around, but this one is mine 🪖
 
 ## What is this?
 
