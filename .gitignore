@@ -3,3 +3,4 @@ spec/examples.txt
 spec/vcr_cassettes
 *.gem
 .DS_Store
+*.cast

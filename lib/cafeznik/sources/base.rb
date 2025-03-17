@@ -4,7 +4,7 @@ module Cafeznik
       BINARY_EXCLUDES = [
         # Images and media
         %w[*.png *.jpg *.jpeg *.gif *.svg *.ico
-           *.pdf *.mov *.mp4 *.mp3 *.wav],
+           *.pdf *.mov *.mp4 *.mp3 *.wav *.cast],
         # Archives
         %w[*.zip *.tar.gz *.tgz *.rar *.7z],
         # Compiled code

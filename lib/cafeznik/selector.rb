@@ -5,7 +5,7 @@ module Cafeznik
     MAX_FILES = 20
 
     def initialize(source)
-      Log.fatal "fzf is kinda the centerpiece of this little tool here. Go install, deal. I'll be here when you're done" unless ToolChecker.fzf_available?
+      Log.fatal "fzf is kinda the centerpiece of this little tool here. Go install it, dear. I'll be here when you're done" unless ToolChecker.fzf_available?
       @source = source
     end
 
