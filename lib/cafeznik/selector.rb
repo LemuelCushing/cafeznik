@@ -26,7 +26,13 @@ module Cafeznik
 
     def select_paths_with_fzf
       Log.debug "Running fzf"
-      run_fzf_command.then { |selected| selected.include?("./") ? [:all_files] : selected }
+      result = run_fzf_command
+      if result.include?("./")
+        @select_all = true
+        ["./"]
+      else
+        result
+      end
     rescue TTY::Command::ExitError => e
       handle_fzf_error(e)
     end
@@ -62,9 +68,17 @@ module Cafeznik
     end
 
     def expand_paths(paths)
-      paths.flat_map do |path|
+      if @select_all
+        Log.debug "Root directory selected, returning all files"
+        return @source.all_files
+      end
+
+      result = paths.flat_map do |path|
         dir?(path) ? @source.expand_dir(path) : path
       end.uniq
+
+      Log.debug "Expanded #{paths.size} paths to #{result.size} files"
+      result
     end
 
     def confirm_count!(paths)
