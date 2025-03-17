@@ -172,35 +172,6 @@ RSpec.describe Cafeznik::Source::Local do
     end
   end
 
-  context "with binary files" do
-    let(:binary_content) { [0, 1, 2].pack("C*") }
-
-    before do
-      File.binwrite("binary.dat", binary_content)
-    end
-
-    context "when binary files are present, it excludes them by default", skip: "TODO:" do
-      # wont even try to read binary files
-      it "does not include binary files in the tree" do
-        expect(source.tree).not_to include("binary.dat")
-      end
-    end
-
-    context "when forced to read binary files", skip: "TODO:" do
-      it "includes binary files in the tree" do
-        expect(source.tree).to include("binary.dat")
-      end
-
-      it "preserves binary encoding" do
-        expect(source.content("binary.dat").encoding).to eq(Encoding::ASCII_8BIT)
-      end
-
-      it "preserves binary content" do
-        expect(source.content("binary.dat").bytes).to eq(binary_content.bytes)
-      end
-    end
-  end
-
   it "handles symlink loops" do
     FileUtils.mkdir_p("loop_dir")
     FileUtils.ln_s("../loop_dir", "loop_dir/loop")

@@ -54,7 +54,7 @@ module Cafeznik
 
     def expand_paths(paths)
       # TODO: I think I can remove the reject here, as it's already done in the source
-      return @source.all_files.reject { |path| @source.exclude?(path) } if paths == [:all_files]
+      # return @source.all_files.reject { |path| @source.exclude?(path) } if paths == [:all_files]
 
       paths.flat_map do |path|
         dir?(path) ? @source.expand_dir(path) : path
