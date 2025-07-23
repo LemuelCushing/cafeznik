@@ -18,20 +18,19 @@ module Cafeznik
       log_init
     end
 
-    def copy_to_clipboard
+    def copy_to_clipboard(output_file: nil, raw: false)
+      @output_file = output_file
+      @raw = raw
       Log.debug "Copying content to clipboard"
       @content = build_content
 
       return Log.info("Copy operation cancelled by user") unless confirm_size!
 
-      ::Clipboard.copy(@content)
-
-      skipped_files = @file_paths.size - files_contents.size
-
-      log_message = "Copied #{@content.lines.size} lines across #{files_contents.size} files"
-      log_message << " (skipped #{skipped_files} empty)" if skipped_files.positive?
-
-      Log.info("#{log_message} to clipboard")
+      if @output_file
+        write_to_file
+      else
+        copy_to_clipboard_os
+      end
     end
 
     private
@@ -45,10 +44,29 @@ module Cafeznik
       end
     end
 
-    def build_content = [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
+    def build_content
+      if @source.is_a?(Source::Diff) && !@raw
+        return files_contents.join("\n\n")
+      end
+      [tree_section, files_contents.join("\n\n")].flatten.compact.join("\n\n")
+    end
 
     def tree_section = @include_tree ? with_header(@source.tree.drop(1).join("\n"), "Tree") : nil
     def with_header(content, title) = "==> #{title} <==\n#{content}"
+
+    def write_to_file
+      list = JSON.generate(@file_paths)
+      File.write(@output_file, "#{list}\n#{@content}")
+      puts "✅ Saved #{@file_paths.size} files#{@raw ? "" : " (with diffs)"} to #{@output_file}."
+    end
+
+    def copy_to_clipboard_os
+      ::Clipboard.copy(@content)
+      skipped_files = @file_paths.size - files_contents.size
+      log_message = "Copied #{@content.lines.size} lines across #{files_contents.size} files"
+      log_message << " (skipped #{skipped_files} empty)" if skipped_files.positive?
+      Log.info("#{log_message} to clipboard")
+    end
 
     memoize def files_contents
       Log.debug "Processing #{@file_paths.size} files in #{THREAD_COUNT} threads"
@@ -90,6 +108,10 @@ module Cafeznik
     end
 
     def fetch_and_format_file(file, errors)
+      if @source.is_a?(Source::Diff) && !@raw
+        return @source.content_with_diff(file)
+      end
+
       content = @source.content(file)
       if content && !content.empty?
         @include_headers ? with_header(content, file) : content

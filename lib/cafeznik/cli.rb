@@ -1,4 +1,6 @@
 require "thor"
+require_relative "cli/diff"
+
 module Cafeznik
   class CLI < Thor
     def self.exit_on_failure? = true
@@ -37,7 +39,8 @@ module Cafeznik
       ).copy_to_clipboard
     end
 
-    desc "help [COMMAND]", "Display detailed help information"
+    desc "diff", "Work with the current git diff"
+    subcommand "diff", Diff
     def help = Help.display(self)
 
     private
