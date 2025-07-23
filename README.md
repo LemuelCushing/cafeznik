@@ -49,6 +49,14 @@ A homebrew line to install all the dependencies on macOS:
 brew install fzf fd ripgrep bat tree gh
 ```
 
+or if you're on Linux, you can use your package manager of choice:
+
+```bash
+sudo apt install fzf fd-find ripgrep bat tree gh
+```
+
+(notice that on Linux, `fd` is often aliased to `fdfind`)
+
 ## Usage
 
 ### Local mode
@@ -112,6 +120,8 @@ cafeznik --help
 - Optional minification of copied files
 - Binary files support for multi-modal models? Might be a stretch
 - Token counting. Everyone loves token counting.
+- Branch diff & git tree compare, to get the files you've been working on
+- PR diff, to get the files you need to be reviewing
 
 ## Noteworthy Competitors I did not take inspiration from
 

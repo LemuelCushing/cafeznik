@@ -70,7 +70,11 @@ module Cafeznik
         []
       end
 
-      def run_cmd(cmd, args) = @cmd.run(cmd, *args).out.split("\n")
+      def run_cmd(cmd, args)
+        # in case we're on linux or use an alias (like fd -> fdfind)
+        real = ToolChecker.resolve(cmd) || cmd
+        @cmd.run(real, *args).out.split("\n")
+      end
     end
   end
 end

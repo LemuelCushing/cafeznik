@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
 require_relative "../lib/cafeznik"
+ENV["BUNDLE_IGNORE_GEMFILE"] = "true"
 
+puts " Cafeznik! (v#{Cafeznik::VERSION})"
 Cafeznik::CLI.start(ARGV)
