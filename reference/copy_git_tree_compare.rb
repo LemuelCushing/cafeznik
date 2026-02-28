@@ -177,16 +177,16 @@ if options[:output_file]
   end
   File.write(options[:output_file], "#{list}\n#{buffer}")
   puts "✅ Saved #{files_to_output.size} files#{options[:raw] ? "" : "(with diffs)"} to #{options[:output_file]}."
-  exit 0
-else
-  clip_cmd = case RUBY_PLATFORM
-  when /darwin/ then "pbcopy"
-  when /linux/  then "xclip -selection clipboard"
-  else
-    warn "⚠️ Clipboard copy not supported on this OS."
-    exit 1
-  end
 
-  IO.popen(clip_cmd, "w") { |io| io.write(buffer) }
-  puts "✅ Copied #{files_to_output.size} files#{options[:raw] ? "" : "(with diffs)"} to clipboard."
+end 
+
+clip_cmd = case RUBY_PLATFORM
+when /darwin/ then "pbcopy"
+when /linux/  then "xclip -selection clipboard"
+else
+  warn "⚠️ Clipboard copy not supported on this OS."
+  exit 1
 end
+
+IO.popen(clip_cmd, "w") { |io| io.write(buffer) }
+puts "✅ Copied #{files_to_output.size} files#{options[:raw] ? "" : "(with diffs)"} to clipboard."
