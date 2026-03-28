@@ -9,7 +9,9 @@ module Cafeznik
       @source = source
     end
 
-    def select
+    def select(select: false, select_all: false)
+      @select = select
+      @select_all_cli = select_all
       skip_selection if @source.tree.empty?
       select_paths_with_fzf
         .tap { log_selection(it) if Log.verbose? }
@@ -27,6 +29,12 @@ module Cafeznik
     def select_paths_with_fzf
       Log.debug "Running fzf"
       result = run_fzf_command
+
+      # For diff source, parse the path from the custom format
+      if @source.is_a?(Cafeznik::Source::Diff)
+        return result.map { |line| line[/エ (.+?) \S*$/, 1] }.compact.uniq
+      end
+
       if result.include?("./")
         @select_all = true
         ["./"]
@@ -52,9 +60,16 @@ module Cafeznik
       "([[ -d {} ]] && (echo '#{warn}'; tree --gitignore -C {} | head -n 50) || #{file_preview})"
     end
 
-    def run_fzf_command = TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
-                                      .run("fzf --multi --preview \"#{preview_command}\"", stdin: @source.tree.join("\n"))
-                                      .out.split("\n")
+    def run_fzf_command
+      args = ["fzf", "--multi"]
+      args << "--preview \"#{preview_command}\""
+      args.concat(["--bind", "start:last+select-all"]) if @select_all_cli
+      args << "--sync" if @source.is_a?(Cafeznik::Source::Diff)
+
+      TTY::Command.new(printer: Log.verbose? ? :pretty : :null)
+                  .run(args.join(" "), stdin: @source.tree.join("\n"))
+                  .out.split("\n")
+    end
 
     def handle_fzf_error(error)
       exit_code = error.message.match(/exit status: (\d+)/)[1].to_i
@@ -68,6 +83,8 @@ module Cafeznik
     end
 
     def expand_paths(paths)
+      return paths if @source.is_a?(Cafeznik::Source::Diff)
+
       if @select_all
         Log.debug "Root directory selected, returning all files"
         return @source.all_files
